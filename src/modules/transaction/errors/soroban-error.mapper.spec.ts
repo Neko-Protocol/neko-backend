@@ -1,36 +1,5 @@
-// SCAFFOLD — feat/lending-tests
-//
-// Unit tests for SorobanErrorMapper in PR2 v2 (transaction relay backend).
-// Production file:
-//   apps/backend/src/modules/transaction/errors/soroban-error.mapper.ts
-//
-// Decisions validated (tx-relay-backend-plan §2):
-//   D7  — Generic mapper, protocol-agnostic (no Blend/Aqua specifics here)
-//   D18 — Prod body omits rawScvalDetails; dev body includes it
-//
-// Activation (when feat/lending-backend lands SorobanErrorMapper):
-//   1. Replace `it.todo("...")` with real `it("...", () => { ... })`.
-//   2. Add imports:
-//        import { SorobanErrorMapper } from "./soroban-error.mapper";
-//        import {
-//          BadRequestException,
-//          ForbiddenException,
-//          HttpException,
-//          UnprocessableEntityException,
-//        } from "@nestjs/common";
-//   3. Construct synthetic RPC sendTransaction error payloads + decoded
-//      scval bodies. Run each through mapper.mapSendError(raw, traceId)
-//      and assert (a) HttpException subclass, (b) status code, (c) body code.
-//   4. Toggle NODE_ENV between "production" and "development" to validate
-//      that rawScvalDetails is stripped in prod (D18).
-
 describe("SorobanErrorMapper", () => {
-  describe("mapped Soroban error codes → HttpException matrix (D7)", () => {
-    // The exact code list comes from soroban-error.decoder.ts in
-    // apps/backend/src/shared/stellar/. The decoder extracts a generic
-    // { code, scvalDetails } from the RPC error envelope and the mapper
-    // maps each known code to an HttpException subclass.
-
+  describe("mapped Soroban error codes → HttpException matrix", () => {
     it.todo(
       "InvalidAction → ForbiddenException 403 with body code 'INVALID_ACTION'"
     );
@@ -60,7 +29,7 @@ describe("SorobanErrorMapper", () => {
     );
   });
 
-  describe("unmapped contract error (D7)", () => {
+  describe("unmapped contract error", () => {
     it.todo(
       "unknown Soroban error code → UnprocessableEntityException 422 with generic 'SOROBAN_CONTRACT_ERROR'"
     );
@@ -70,7 +39,7 @@ describe("SorobanErrorMapper", () => {
     );
   });
 
-  describe("prod vs dev body shape (D18)", () => {
+  describe("prod vs dev body shape", () => {
     it.todo(
       "in NODE_ENV=production, mapped exception body excludes rawScvalDetails"
     );
