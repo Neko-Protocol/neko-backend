@@ -8,7 +8,7 @@ import {
 
 /**
  * Parses an RPC URL and isolates basic-auth credentials from the host,
- * so the raw URL with credentials is never logged (D20).
+ * so the raw URL with credentials is never logged.
  */
 function isolateUrlCredentials(rawUrl: string): {
   safeUrl: string;

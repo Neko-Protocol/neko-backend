@@ -5,9 +5,8 @@ import { SorobanContractException } from "../../../shared/stellar/soroban-contra
 const isProd = () => process.env.NODE_ENV === "production";
 
 /**
- * Generic mapper from raw RPC / SDK errors → HttpException.
- * Per D7/D26 this is intentionally protocol-agnostic. Caller is responsible
- * for any per-protocol enrichment.
+ * Generic mapper from raw RPC / SDK errors → HttpException. Intentionally
+ * protocol-agnostic; caller is responsible for any per-protocol enrichment.
  */
 @Injectable()
 export class SorobanErrorMapper {

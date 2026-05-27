@@ -3,16 +3,16 @@ import { HttpException, HttpStatus } from "@nestjs/common";
 export interface SorobanContractExceptionDetails {
   code: string;
   traceId?: string;
-  /** Extra info kept only in dev/non-prod responses (D18). */
+  /** Extra info kept only in dev/non-prod responses. */
   details?: Record<string, unknown>;
   /** Always logged server-side, never returned in prod. */
   reason?: string;
 }
 
 /**
- * Base HttpException for transaction-relay errors. Honours D18: in production,
- * detail fields are dropped from the response body so the client only sees
- * the opaque `code` + `traceId`. Internal `reason` is logged separately.
+ * Base HttpException for transaction-relay errors. In production, detail
+ * fields are dropped from the response body so the client only sees the
+ * opaque `code` + `traceId`. Internal `reason` is logged separately.
  */
 export class SorobanContractException extends HttpException {
   readonly traceId?: string;

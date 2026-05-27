@@ -1,18 +1,9 @@
 /**
- * ContractAllowlist (D23)
- *
  * Mainnet contract IDs the dApp is permitted to invoke through the relay.
- * Sourced from frontend constants (snapshot of neko-mainnet-frontend on 2026-05-27):
- *   - apps/web-app/src/lib/constants/contracts.ts       (lending, backstop, oracle)
- *   - apps/web-app/src/lib/constants/assets.config.ts   (asset SAC addresses)
- *   - apps/web-app/src/lib/defindex/vaultIds.ts         (Neko + Blend-keeper vaults)
- *   - apps/web-app/src/lib/orchestrator/adapters/blend-config.ts (Blend pool + reserves)
- *   - apps/web-app/src/lib/orchestrator/adapters/aqua-config.ts  (Aqua AMM pools)
- *   - apps/web-app/src/lib/orchestrator/adapters/AquaPoolAdapter.ts (AQUA_ROUTER)
  *
  * Soroswap router / factory IDs are resolved at runtime via the Soroswap SDK
- * (no compile-time constant in the frontend). They MUST be added here once
- * QA confirms the production address — without them /tx/prepare will reject
+ * (no compile-time constant in the frontend) and must be added here once the
+ * production address is confirmed — without them /tx/prepare will reject
  * Soroswap deposit/withdraw flows.
  */
 
@@ -92,7 +83,7 @@ export const CONTRACT_ALLOWLIST: ReadonlyMap<string, ContractLabel> = new Map([
 ]);
 
 /**
- * Operation names (Soroban host function symbols) accepted by /tx/prepare (D22).
+ * Operation names (Soroban host function symbols) accepted by /tx/prepare.
  * Anything outside this set is rejected with DISALLOWED_OPERATION.
  */
 export const ALLOWED_FUNCTION_NAMES: ReadonlySet<string> = new Set([

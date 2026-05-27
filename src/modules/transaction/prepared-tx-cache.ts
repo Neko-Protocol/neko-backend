@@ -16,8 +16,6 @@ const DEFAULT_TTL_MS = 120_000;
 const DEFAULT_MAX_SIZE = 10_000;
 
 /**
- * PreparedTxCache (D2, D17)
- *
  * In-memory Map keyed by sourceAccount. Each entry holds the hash of a prepared
  * transaction, the network passphrase at prepare-time, and a TTL. `consume()`
  * is one-shot — submit deletes the entry once validated.
