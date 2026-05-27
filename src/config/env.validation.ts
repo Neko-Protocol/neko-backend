@@ -5,6 +5,9 @@ export const envValidationSchema = Joi.object({
     .valid("development", "production", "test")
     .default("development"),
   PORT: Joi.number().integer().min(1).max(65535).default(4000),
+  LOG_LEVEL: Joi.string()
+    .valid("fatal", "error", "warn", "info", "debug", "trace", "silent")
+    .default("info"),
 
   STELLAR_NETWORK: Joi.string().valid("mainnet", "testnet").required(),
   STELLAR_NETWORK_PASSPHRASE: Joi.string().min(1).required(),

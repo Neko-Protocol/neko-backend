@@ -2,6 +2,8 @@ import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { LoggerModule } from "nestjs-pino";
+import type { IncomingMessage } from "http";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
 import { HealthModule } from "./modules/health/health.module";
@@ -15,6 +17,31 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
       isGlobal: true,
       validationSchema: envValidationSchema,
       validationOptions: { abortEarly: false, allowUnknown: true },
+    }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.LOG_LEVEL ?? "info",
+        transport:
+          process.env.NODE_ENV === "production"
+            ? undefined
+            : { target: "pino-pretty", options: { singleLine: true } },
+        customProps: (req: IncomingMessage) => ({
+          traceId: (req as IncomingMessage & { traceId?: string }).traceId,
+        }),
+        redact: {
+          paths: [
+            "req.headers.authorization",
+            "req.headers.cookie",
+            "req.headers['x-supabase-auth']",
+          ],
+          censor: "[REDACTED]",
+        },
+        serializers: {
+          req(req: { method?: string; url?: string }) {
+            return { method: req.method, url: req.url };
+          },
+        },
+      },
     }),
     // Per-endpoint overrides live on TransactionController.
     ThrottlerModule.forRoot([

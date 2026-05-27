@@ -1,8 +1,9 @@
-import { Logger, ValidationPipe } from "@nestjs/common";
+import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import compression from "compression";
 import helmet from "helmet";
+import { Logger } from "nestjs-pino";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { AppModule } from "./app.module";
 
@@ -34,8 +35,10 @@ process.on("uncaughtException", (err) => {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: ["error", "warn", "log"],
+    bufferLogs: true,
   });
+  const logger = app.get(Logger);
+  app.useLogger(logger);
 
   // See TRUST_PROXY_HOPS in .env.example — setting higher than the real chain
   // lets clients spoof X-Forwarded-For.
@@ -50,7 +53,7 @@ async function bootstrap() {
     .filter(Boolean);
 
   if (origins.length === 0) {
-    Logger.warn(
+    logger.warn(
       "CORS_ORIGIN is empty — every browser origin will be rejected.",
       "Bootstrap"
     );
@@ -85,7 +88,7 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port);
-  Logger.log(`Neko backend listening on :${port}`, "Bootstrap");
+  logger.log(`Neko backend listening on :${port}`, "Bootstrap");
 }
 
 bootstrap();
