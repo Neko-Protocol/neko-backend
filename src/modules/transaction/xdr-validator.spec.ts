@@ -18,8 +18,8 @@ import { StellarRpcService } from "../stellar/stellar-rpc.service";
 import { XdrValidator } from "./xdr-validator";
 
 const PASSPHRASE = Networks.PUBLIC;
-const ALLOWED_LENDING_POOL =
-  "CAPTJPAXEURYXEWGDSCCU3SZDYIP3U7KTS7VQM2EYLLK2JKIR4JIVWIH";
+const ALLOWED_BLEND_POOL =
+  "CDMAVJPFXPADND3YRL4BSM3AKZWCTFMX27GLLXCML3PD62HEQS5FPVAI";
 const ALLOWED_VAULT_EURC =
   "CB3FUMFGCF6DHSFK6N2TOKHRMYXS34HFKQR45UKVORCRUM35AF3ES7WQ";
 const DISALLOWED_CONTRACT = StrKey.encodeContract(Buffer.alloc(32, 0xab));
@@ -28,9 +28,10 @@ function makeAccount(): Account {
   return new Account(Keypair.random().publicKey(), "0");
 }
 
-function buildXdr(
-  ...ops: ReturnType<typeof Operation.payment>[]
-): { xdr: string; sourceAccount: string } {
+function buildXdr(...ops: ReturnType<typeof Operation.payment>[]): {
+  xdr: string;
+  sourceAccount: string;
+} {
   const account = makeAccount();
   const builder = new TransactionBuilder(account, {
     fee: BASE_FEE,
@@ -76,7 +77,7 @@ describe("XdrValidator.parseAndValidate", () => {
   describe("allowed paths", () => {
     it("valid invokeHostFunction on allowlisted contract with allowed fn returns hash, sourceAccount, passphrase, ops", () => {
       const { xdr, sourceAccount } = buildInvokeXdr(
-        ALLOWED_LENDING_POOL,
+        ALLOWED_BLEND_POOL,
         "deposit"
       );
 
@@ -88,32 +89,29 @@ describe("XdrValidator.parseAndValidate", () => {
       expect(result.ops).toHaveLength(1);
       expect(result.ops[0]).toMatchObject({
         kind: "invoke",
-        contractId: ALLOWED_LENDING_POOL,
+        contractId: ALLOWED_BLEND_POOL,
         fnName: "deposit",
-        label: "lending:pool1",
+        label: "blend:pool",
       });
     });
 
-    it("supports multiple allowlisted fn names on lending pool (withdraw, submit)", () => {
+    it("supports multiple allowlisted fn names on Blend pool (withdraw, submit)", () => {
       for (const fn of ["withdraw", "submit"]) {
-        const { xdr } = buildInvokeXdr(ALLOWED_LENDING_POOL, fn);
+        const { xdr } = buildInvokeXdr(ALLOWED_BLEND_POOL, fn);
         const result = validator.parseAndValidate(xdr);
         expect(result.ops[0]).toMatchObject({ kind: "invoke", fnName: fn });
       }
     });
 
-    it("supports mint/burn on asset SAC", () => {
+    it("rejects raw mint/burn/transfer/approve on an asset SAC", () => {
+      // Token writes must only appear as nested authorized sub-invocations
+      // inside protocol calls (Blend submit, Soroswap swap, etc.), never as
+      // top-level ops — see contract-allowlist.ts for the rationale.
       const USDC_SAC =
         "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
-      for (const fn of ["mint", "burn"]) {
+      for (const fn of ["mint", "burn", "transfer", "approve"]) {
         const { xdr } = buildInvokeXdr(USDC_SAC, fn);
-        const result = validator.parseAndValidate(xdr);
-        expect(result.ops[0]).toMatchObject({
-          kind: "invoke",
-          contractId: USDC_SAC,
-          fnName: fn,
-          label: "asset:USDC",
-        });
+        expect(() => validator.parseAndValidate(xdr)).toThrow();
       }
     });
 
@@ -171,10 +169,9 @@ describe("XdrValidator.parseAndValidate", () => {
         validator.parseAndValidate(xdr);
         fail("expected to throw");
       } catch (err) {
-        const body = (err as UnprocessableEntityException).getResponse() as Record<
-          string,
-          unknown
-        >;
+        const body = (
+          err as UnprocessableEntityException
+        ).getResponse() as Record<string, unknown>;
         expect(body.code).toBe("PREPARE_REJECTED");
         expect(body.details).toBeUndefined();
         expect(JSON.stringify(body)).not.toContain(DISALLOWED_CONTRACT);
@@ -264,10 +261,9 @@ describe("XdrValidator.parseAndValidate", () => {
         validator.parseAndValidate(xdr);
         fail("expected to throw");
       } catch (err) {
-        const body = (err as UnprocessableEntityException).getResponse() as Record<
-          string,
-          unknown
-        >;
+        const body = (
+          err as UnprocessableEntityException
+        ).getResponse() as Record<string, unknown>;
         expect(body.code).toBe("DISALLOWED_OPERATION");
         expect(body.details).toBeUndefined();
       }
@@ -276,7 +272,7 @@ describe("XdrValidator.parseAndValidate", () => {
 
   describe("disallowed function name", () => {
     it("invoke on allowlisted contract with unknown fn throws UnprocessableEntityException", () => {
-      const { xdr } = buildInvokeXdr(ALLOWED_LENDING_POOL, "admin_transfer");
+      const { xdr } = buildInvokeXdr(ALLOWED_BLEND_POOL, "admin_transfer");
       expect(() => validator.parseAndValidate(xdr)).toThrow(
         UnprocessableEntityException
       );
@@ -284,16 +280,15 @@ describe("XdrValidator.parseAndValidate", () => {
 
     it("in NODE_ENV=production, fn rejection body is generic PREPARE_REJECTED", () => {
       process.env.NODE_ENV = "production";
-      const { xdr } = buildInvokeXdr(ALLOWED_LENDING_POOL, "admin_transfer");
+      const { xdr } = buildInvokeXdr(ALLOWED_BLEND_POOL, "admin_transfer");
 
       try {
         validator.parseAndValidate(xdr);
         fail("expected to throw");
       } catch (err) {
-        const body = (err as UnprocessableEntityException).getResponse() as Record<
-          string,
-          unknown
-        >;
+        const body = (
+          err as UnprocessableEntityException
+        ).getResponse() as Record<string, unknown>;
         expect(body.code).toBe("PREPARE_REJECTED");
         expect(body.details).toBeUndefined();
       }
@@ -301,7 +296,7 @@ describe("XdrValidator.parseAndValidate", () => {
 
     it("in NODE_ENV=development, fn rejection body includes fnName and contractId", () => {
       process.env.NODE_ENV = "development";
-      const { xdr } = buildInvokeXdr(ALLOWED_LENDING_POOL, "admin_transfer");
+      const { xdr } = buildInvokeXdr(ALLOWED_BLEND_POOL, "admin_transfer");
 
       try {
         validator.parseAndValidate(xdr);
@@ -313,7 +308,7 @@ describe("XdrValidator.parseAndValidate", () => {
         };
         expect(body.code).toBe("DISALLOWED_OPERATION");
         expect(body.details?.fnName).toBe("admin_transfer");
-        expect(body.details?.contractId).toBe(ALLOWED_LENDING_POOL);
+        expect(body.details?.contractId).toBe(ALLOWED_BLEND_POOL);
       }
     });
   });
@@ -350,7 +345,7 @@ describe("XdrValidator.parseAndValidate", () => {
         fee: BASE_FEE,
         networkPassphrase: PASSPHRASE,
       })
-        .addOperation(invokeOp(ALLOWED_LENDING_POOL, "deposit"))
+        .addOperation(invokeOp(ALLOWED_BLEND_POOL, "deposit"))
         .addOperation(Operation.manageData({ name: "test", value: "value" }))
         .setTimeout(30)
         .build();
@@ -367,7 +362,7 @@ describe("XdrValidator.parseAndValidate", () => {
         fee: BASE_FEE,
         networkPassphrase: PASSPHRASE,
       })
-        .addOperation(invokeOp(ALLOWED_LENDING_POOL, "deposit"))
+        .addOperation(invokeOp(ALLOWED_BLEND_POOL, "deposit"))
         .addOperation(invokeOp(DISALLOWED_CONTRACT, "deposit"))
         .setTimeout(30)
         .build();
@@ -389,7 +384,7 @@ describe("XdrValidator.parseAndValidate", () => {
         fee: BASE_FEE,
         networkPassphrase: PASSPHRASE,
       })
-        .addOperation(invokeOp(ALLOWED_LENDING_POOL, "deposit"))
+        .addOperation(invokeOp(ALLOWED_BLEND_POOL, "deposit"))
         .addOperation(invokeOp(ALLOWED_VAULT_EURC, "withdraw"))
         .setTimeout(30)
         .build();
@@ -399,7 +394,7 @@ describe("XdrValidator.parseAndValidate", () => {
       expect(result.ops).toHaveLength(2);
       expect(result.ops[0]).toMatchObject({
         kind: "invoke",
-        contractId: ALLOWED_LENDING_POOL,
+        contractId: ALLOWED_BLEND_POOL,
         fnName: "deposit",
       });
       expect(result.ops[1]).toMatchObject({
@@ -412,7 +407,7 @@ describe("XdrValidator.parseAndValidate", () => {
 
   describe("hash + sourceAccount extraction", () => {
     it("hash is 64-char lowercase hex (32 bytes)", () => {
-      const { xdr } = buildInvokeXdr(ALLOWED_LENDING_POOL, "deposit");
+      const { xdr } = buildInvokeXdr(ALLOWED_BLEND_POOL, "deposit");
       const result = validator.parseAndValidate(xdr);
       expect(result.hash).toMatch(/^[a-f0-9]{64}$/);
     });
@@ -423,7 +418,7 @@ describe("XdrValidator.parseAndValidate", () => {
         fee: BASE_FEE,
         networkPassphrase: PASSPHRASE,
       })
-        .addOperation(invokeOp(ALLOWED_LENDING_POOL, "deposit"))
+        .addOperation(invokeOp(ALLOWED_BLEND_POOL, "deposit"))
         .setTimeout(30)
         .build();
 
@@ -433,7 +428,7 @@ describe("XdrValidator.parseAndValidate", () => {
     });
 
     it("passphrase equals StellarRpcService.getNetworkPassphrase()", () => {
-      const { xdr } = buildInvokeXdr(ALLOWED_LENDING_POOL, "deposit");
+      const { xdr } = buildInvokeXdr(ALLOWED_BLEND_POOL, "deposit");
       const result = validator.parseAndValidate(xdr);
       expect(result.passphrase).toBe(PASSPHRASE);
     });

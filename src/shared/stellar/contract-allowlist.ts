@@ -5,29 +5,14 @@
 export type ContractLabel = string;
 
 export const CONTRACT_ALLOWLIST: ReadonlyMap<string, ContractLabel> = new Map([
-  // ── Lending pools ──────────────────────────────────────────────────────────
-  ["CAPTJPAXEURYXEWGDSCCU3SZDYIP3U7KTS7VQM2EYLLK2JKIR4JIVWIH", "lending:pool1"],
-  ["CD3HUT3N6LLUS4XZUWRIIJZUKN2B3UDDMEH2IMK6S3UKAHTZ6VKKBTYQ", "lending:pool2"],
-
-  // ── Backstops (kept in case re-introduced) ─────────────────────────────────
-  [
-    "CCSNXCONDIFZADRJZZRHMRXDGTC6EMI7ZAYAJPJMXSDHBMOPBLBX5XQX",
-    "backstop:pool1",
-  ],
-  [
-    "CADKADCLXIZTU7Q3WS5M37HUF5BX3WCSTCM2ESN2JCJK5FBBH57FKSAV",
-    "backstop:pool2",
-  ],
-
-  // ── Oracles ────────────────────────────────────────────────────────────────
-  ["CALI2BYU2JE6WVRUFYTS6MSBNEHGJ35P4AVCZYF3B6QOE3QKOB2PLE6M", "oracle:reflector"],
-  [
-    "CDJVAFSJTERWPYEZQJGN2N5N4BMXGMG6A2AWQK4C3V36MRYB4PRSNM2S",
-    "oracle:lending",
-  ],
-
-  // ── Blend pool (public mainnet) ────────────────────────────────────────────
+  // ── Blend lending pool (public mainnet) ────────────────────────────────────
   ["CDMAVJPFXPADND3YRL4BSM3AKZWCTFMX27GLLXCML3PD62HEQS5FPVAI", "blend:pool"],
+
+  // ── Oracle (SEP-40 Reflector) ──────────────────────────────────────────────
+  [
+    "CALI2BYU2JE6WVRUFYTS6MSBNEHGJ35P4AVCZYF3B6QOE3QKOB2PLE6M",
+    "oracle:reflector",
+  ],
 
   // ── Asset SACs (mainnet) ───────────────────────────────────────────────────
   ["CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA", "asset:XLM"],
@@ -45,17 +30,44 @@ export const CONTRACT_ALLOWLIST: ReadonlyMap<string, ContractLabel> = new Map([
   ],
 
   // ── DeFindex / Neko vaults ─────────────────────────────────────────────────
-  ["CB3FUMFGCF6DHSFK6N2TOKHRMYXS34HFKQR45UKVORCRUM35AF3ES7WQ", "vault:EURC-neko"],
-  ["CCUZC3HC5TH2VCYZFUG57E6IGKPL45YUN2SI3UEYQUBA7RCYHUIZBSFV", "vault:USDC-neko-fixed"],
-  ["CANBU7T77SCJOOAU6VQAOGR7DN36JBQFUN56XS2WA2VPJYUSRUBIPYDS", "vault:CETES-neko"],
-  ["CCIRVAW3IZVAYLHR7YYMZFOQVYEW67OKFFXR3J6ZR2T6YJC5V7GTSNQ5", "vault:USTRY-neko"],
-  ["CBMERS7MJHO6TGKUVWWU34ZSKWCFOWPG2ZCIRIT75IC3YDWBIPBMV5LB", "vault:TESOURO-neko"],
+  [
+    "CB3FUMFGCF6DHSFK6N2TOKHRMYXS34HFKQR45UKVORCRUM35AF3ES7WQ",
+    "vault:EURC-neko",
+  ],
+  [
+    "CCUZC3HC5TH2VCYZFUG57E6IGKPL45YUN2SI3UEYQUBA7RCYHUIZBSFV",
+    "vault:USDC-neko-fixed",
+  ],
+  [
+    "CANBU7T77SCJOOAU6VQAOGR7DN36JBQFUN56XS2WA2VPJYUSRUBIPYDS",
+    "vault:CETES-neko",
+  ],
+  [
+    "CCIRVAW3IZVAYLHR7YYMZFOQVYEW67OKFFXR3J6ZR2T6YJC5V7GTSNQ5",
+    "vault:USTRY-neko",
+  ],
+  [
+    "CBMERS7MJHO6TGKUVWWU34ZSKWCFOWPG2ZCIRIT75IC3YDWBIPBMV5LB",
+    "vault:TESOURO-neko",
+  ],
 
   // ── Blend keeper vaults ────────────────────────────────────────────────────
-  ["CDI2ZW5CKT4OIHX3IGMVJ4VGOH6Z64N2M3URKATYJIX7JRITJFQJPFD7", "vault:CETES-blend"],
-  ["CBYTDU4JKTMFG5CNIUYJTOVMNIN5ADU2PDG4QWIUVT6SSVK3VTXYTF4K", "vault:USTRY-blend"],
-  ["CCM3CKJI7BBMZ357644KLAE6NH4D7JQ6MUJHSV4UBRWJY7IMGHBJRNGR", "vault:USDC-blend"],
-  ["CAXRLUOSI7DL3SYNZW5UGRIPVNRKKSZTW35OX5DWKZSJ4PFEVA2VEFCQ", "vault:TESOURO-blend"],
+  [
+    "CDI2ZW5CKT4OIHX3IGMVJ4VGOH6Z64N2M3URKATYJIX7JRITJFQJPFD7",
+    "vault:CETES-blend",
+  ],
+  [
+    "CBYTDU4JKTMFG5CNIUYJTOVMNIN5ADU2PDG4QWIUVT6SSVK3VTXYTF4K",
+    "vault:USTRY-blend",
+  ],
+  [
+    "CCM3CKJI7BBMZ357644KLAE6NH4D7JQ6MUJHSV4UBRWJY7IMGHBJRNGR",
+    "vault:USDC-blend",
+  ],
+  [
+    "CAXRLUOSI7DL3SYNZW5UGRIPVNRKKSZTW35OX5DWKZSJ4PFEVA2VEFCQ",
+    "vault:TESOURO-blend",
+  ],
 
   // ── Soroswap ───────────────────────────────────────────────────────────────
   [
@@ -88,7 +100,7 @@ export const CONTRACT_ALLOWLIST: ReadonlyMap<string, ContractLabel> = new Map([
  * Anything outside this set is rejected with DISALLOWED_OPERATION.
  */
 export const ALLOWED_FUNCTION_NAMES: ReadonlySet<string> = new Set([
-  // Lending / vault writes
+  // Lending / vault writes (Blend pool entrypoint is `submit`, the rest are SDK aliases)
   "deposit",
   "withdraw",
   "borrow",
@@ -97,12 +109,11 @@ export const ALLOWED_FUNCTION_NAMES: ReadonlySet<string> = new Set([
   "claim_rewards",
   "claimRewards",
   "submit",
-  // Token writes
-  "mint",
-  "burn",
-  "transfer",
-  "approve",
-  // Soroswap / Aqua liquidity
+  // Soroswap / Aqua liquidity (top-level router entrypoints; `transfer` /
+  // `approve` happen as nested authorized sub-invocations inside these, not
+  // as top-level ops, so we deliberately do NOT include raw SAC token writes
+  // here. Adding them would let a signed XDR drain funds to arbitrary
+  // destinations via the relay.)
   "add_liquidity",
   "remove_liquidity",
   "addLiquidity",

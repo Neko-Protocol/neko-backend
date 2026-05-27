@@ -6,19 +6,11 @@ import {
   isAllowedFunction,
 } from "./contract-allowlist";
 
-const EXPECTED_LENDING_POOL_IDS = [
-  "CAPTJPAXEURYXEWGDSCCU3SZDYIP3U7KTS7VQM2EYLLK2JKIR4JIVWIH",
-  "CD3HUT3N6LLUS4XZUWRIIJZUKN2B3UDDMEH2IMK6S3UKAHTZ6VKKBTYQ",
-];
-
-const EXPECTED_BACKSTOP_IDS = [
-  "CCSNXCONDIFZADRJZZRHMRXDGTC6EMI7ZAYAJPJMXSDHBMOPBLBX5XQX",
-  "CADKADCLXIZTU7Q3WS5M37HUF5BX3WCSTCM2ESN2JCJK5FBBH57FKSAV",
-];
+const EXPECTED_BLEND_POOL_ID =
+  "CDMAVJPFXPADND3YRL4BSM3AKZWCTFMX27GLLXCML3PD62HEQS5FPVAI";
 
 const EXPECTED_ORACLE_IDS = [
   "CALI2BYU2JE6WVRUFYTS6MSBNEHGJ35P4AVCZYF3B6QOE3QKOB2PLE6M",
-  "CDJVAFSJTERWPYEZQJGN2N5N4BMXGMG6A2AWQK4C3V36MRYB4PRSNM2S",
 ];
 
 const EXPECTED_DEFINDEX_VAULT_IDS = [
@@ -44,19 +36,11 @@ const EXPECTED_ASSET_SAC_IDS = [
 
 describe("ContractAllowlist (mainnet)", () => {
   describe("contains expected IDs by category", () => {
-    it("includes all lending pool contractIds", () => {
-      for (const id of EXPECTED_LENDING_POOL_IDS) {
-        expect(isAllowedContract(id)).toBe(true);
-      }
+    it("includes the Blend public-mainnet pool contractId", () => {
+      expect(isAllowedContract(EXPECTED_BLEND_POOL_ID)).toBe(true);
     });
 
-    it("includes all backstop contractIds", () => {
-      for (const id of EXPECTED_BACKSTOP_IDS) {
-        expect(isAllowedContract(id)).toBe(true);
-      }
-    });
-
-    it("includes all oracle contractIds (Reflector + legacy)", () => {
+    it("includes the Reflector oracle contractId", () => {
       for (const id of EXPECTED_ORACLE_IDS) {
         expect(isAllowedContract(id)).toBe(true);
       }
@@ -76,7 +60,9 @@ describe("ContractAllowlist (mainnet)", () => {
 
     it("includes Aqua AMM router and pool contractIds", () => {
       expect(
-        isAllowedContract("CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK")
+        isAllowedContract(
+          "CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK"
+        )
       ).toBe(true);
       const aquaPoolCount = Array.from(CONTRACT_ALLOWLIST.values()).filter(
         (label) => label.startsWith("aqua:pool:")
@@ -93,18 +79,18 @@ describe("ContractAllowlist (mainnet)", () => {
 
   describe("isAllowedContract semantics", () => {
     it("is case-sensitive: lowercased contractId returns false", () => {
-      const id = EXPECTED_LENDING_POOL_IDS[0];
+      const id = EXPECTED_BLEND_POOL_ID;
       expect(isAllowedContract(id)).toBe(true);
       expect(isAllowedContract(id.toLowerCase())).toBe(false);
     });
 
     it("is exact-match: a prefix of a known id returns false", () => {
-      const id = EXPECTED_LENDING_POOL_IDS[0];
+      const id = EXPECTED_BLEND_POOL_ID;
       expect(isAllowedContract(id.slice(0, 55))).toBe(false);
     });
 
     it("is exact-match: a suffix of a known id returns false", () => {
-      const id = EXPECTED_LENDING_POOL_IDS[0];
+      const id = EXPECTED_BLEND_POOL_ID;
       expect(isAllowedContract(id.slice(1))).toBe(false);
     });
 
@@ -113,24 +99,36 @@ describe("ContractAllowlist (mainnet)", () => {
     });
 
     it("returns false for 55-char garbage starting with C", () => {
-      expect(
-        isAllowedContract("C" + "0".repeat(54))
-      ).toBe(false);
+      expect(isAllowedContract("C" + "0".repeat(54))).toBe(false);
     });
   });
 
   describe("getContractLabel", () => {
     it("returns the namespaced label for an allowlisted id", () => {
+      expect(getContractLabel(EXPECTED_BLEND_POOL_ID)).toBe("blend:pool");
       expect(
-        getContractLabel("CAPTJPAXEURYXEWGDSCCU3SZDYIP3U7KTS7VQM2EYLLK2JKIR4JIVWIH")
-      ).toBe("lending:pool1");
-      expect(
-        getContractLabel("CB3FUMFGCF6DHSFK6N2TOKHRMYXS34HFKQR45UKVORCRUM35AF3ES7WQ")
+        getContractLabel(
+          "CB3FUMFGCF6DHSFK6N2TOKHRMYXS34HFKQR45UKVORCRUM35AF3ES7WQ"
+        )
       ).toBe("vault:EURC-neko");
     });
 
     it("returns undefined for a non-allowlisted id", () => {
       expect(getContractLabel("C" + "0".repeat(55))).toBeUndefined();
+    });
+
+    it("returns undefined for the legacy testnet lending pool addresses", () => {
+      const removedTestnetIds = [
+        "CAPTJPAXEURYXEWGDSCCU3SZDYIP3U7KTS7VQM2EYLLK2JKIR4JIVWIH",
+        "CD3HUT3N6LLUS4XZUWRIIJZUKN2B3UDDMEH2IMK6S3UKAHTZ6VKKBTYQ",
+        "CCSNXCONDIFZADRJZZRHMRXDGTC6EMI7ZAYAJPJMXSDHBMOPBLBX5XQX",
+        "CADKADCLXIZTU7Q3WS5M37HUF5BX3WCSTCM2ESN2JCJK5FBBH57FKSAV",
+        "CDJVAFSJTERWPYEZQJGN2N5N4BMXGMG6A2AWQK4C3V36MRYB4PRSNM2S",
+      ];
+      for (const id of removedTestnetIds) {
+        expect(getContractLabel(id)).toBeUndefined();
+        expect(isAllowedContract(id)).toBe(false);
+      }
     });
   });
 
@@ -150,9 +148,13 @@ describe("ContractAllowlist (mainnet)", () => {
       }
     });
 
-    it("includes token-write functions (mint, burn, transfer, approve)", () => {
+    it("rejects raw SAC token-write functions as top-level ops", () => {
+      // transfer/approve/mint/burn must only appear as nested authorized
+      // sub-invocations inside protocol calls (Blend pool submit, Soroswap
+      // swap, etc.), never as top-level ops — otherwise a signed XDR could
+      // drain funds to arbitrary destinations via the relay.
       for (const fn of ["mint", "burn", "transfer", "approve"]) {
-        expect(isAllowedFunction(fn)).toBe(true);
+        expect(isAllowedFunction(fn)).toBe(false);
       }
     });
 
@@ -210,8 +212,7 @@ describe("ContractAllowlist (mainnet)", () => {
 
     it("allowlist covers every documented category snapshot count", () => {
       expect(CONTRACT_ALLOWLIST.size).toBeGreaterThanOrEqual(
-        EXPECTED_LENDING_POOL_IDS.length +
-          EXPECTED_BACKSTOP_IDS.length +
+        1 + // Blend public-mainnet pool
           EXPECTED_ORACLE_IDS.length +
           EXPECTED_DEFINDEX_VAULT_IDS.length +
           EXPECTED_BLEND_KEEPER_VAULT_IDS.length +

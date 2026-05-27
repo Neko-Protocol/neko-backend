@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, HttpException, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  Logger,
+} from "@nestjs/common";
 import {
   Account,
   BASE_FEE,
@@ -17,13 +22,13 @@ import { XdrValidator } from "./xdr-validator";
 import { StellarRpcService } from "../stellar/stellar-rpc.service";
 
 const PASSPHRASE = Networks.PUBLIC;
-const ALLOWED_LENDING_POOL =
-  "CAPTJPAXEURYXEWGDSCCU3SZDYIP3U7KTS7VQM2EYLLK2JKIR4JIVWIH";
+const ALLOWED_BLEND_POOL =
+  "CDMAVJPFXPADND3YRL4BSM3AKZWCTFMX27GLLXCML3PD62HEQS5FPVAI";
 const IP = "127.0.0.1";
 
 function buildUnsignedXdr() {
   const account = new Account(Keypair.random().publicKey(), "0");
-  const op = new Contract(ALLOWED_LENDING_POOL).call("deposit");
+  const op = new Contract(ALLOWED_BLEND_POOL).call("deposit");
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: PASSPHRASE,
@@ -31,7 +36,11 @@ function buildUnsignedXdr() {
     .addOperation(op)
     .setTimeout(30)
     .build();
-  return { xdr: tx.toXDR(), sourceAccount: account.accountId(), hash: tx.hash().toString("hex") };
+  return {
+    xdr: tx.toXDR(),
+    sourceAccount: account.accountId(),
+    hash: tx.hash().toString("hex"),
+  };
 }
 
 interface MockedRpc {
@@ -51,7 +60,9 @@ function makeRpcMock(): MockedRpc {
   return { service, sendTransaction, getTransaction };
 }
 
-function successResponse(returnValue?: xdr.ScVal): rpc.Api.GetSuccessfulTransactionResponse {
+function successResponse(
+  returnValue?: xdr.ScVal
+): rpc.Api.GetSuccessfulTransactionResponse {
   return {
     status: rpc.Api.GetTransactionStatus.SUCCESS,
     returnValue,
@@ -147,7 +158,7 @@ describe("TransactionService", () => {
           fee: BASE_FEE,
           networkPassphrase: PASSPHRASE,
         })
-          .addOperation(new Contract(ALLOWED_LENDING_POOL).call(fnName))
+          .addOperation(new Contract(ALLOWED_BLEND_POOL).call(fnName))
           .setTimeout(30)
           .build();
       const tx1 = buildFor("deposit");
@@ -183,7 +194,10 @@ describe("TransactionService", () => {
         await service.prepare({ unsignedXdr: tx.toXDR() }, IP);
         fail("expected to throw");
       } catch (err) {
-        const body = (err as HttpException).getResponse() as Record<string, unknown>;
+        const body = (err as HttpException).getResponse() as Record<
+          string,
+          unknown
+        >;
         expect(body.code).toBe("PREPARE_REJECTED");
         expect(body.details).toBeUndefined();
       }
@@ -375,7 +389,7 @@ describe("TransactionService", () => {
         fee: BASE_FEE,
         networkPassphrase: PASSPHRASE,
       })
-        .addOperation(new Contract(ALLOWED_LENDING_POOL).call("deposit"))
+        .addOperation(new Contract(ALLOWED_BLEND_POOL).call("deposit"))
         .setTimeout(30)
         .build();
       innerTx.sign(innerKp);
