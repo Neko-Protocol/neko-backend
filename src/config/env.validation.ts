@@ -1,0 +1,25 @@
+import * as Joi from "joi";
+
+export const envValidationSchema = Joi.object({
+  NODE_ENV: Joi.string()
+    .valid("development", "production", "test")
+    .default("development"),
+  PORT: Joi.number().integer().min(1).max(65535).default(4000),
+
+  STELLAR_NETWORK: Joi.string().valid("mainnet", "testnet").required(),
+  STELLAR_NETWORK_PASSPHRASE: Joi.string().min(1).required(),
+  STELLAR_RPC_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .required(),
+  STELLAR_HORIZON_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .required(),
+  STELLAR_RPC_AUTH_HEADER: Joi.string().optional().allow(""),
+
+  // Optional until a backend feature actually depends on Supabase.
+  SUPABASE_URL: Joi.string().uri().optional().allow(""),
+  SUPABASE_SERVICE_ROLE_KEY: Joi.string().optional().allow(""),
+
+  CORS_ORIGIN: Joi.string().optional().allow(""),
+  TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
+});

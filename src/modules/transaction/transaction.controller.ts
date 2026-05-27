@@ -20,20 +20,29 @@ export class TransactionController {
 
   @Post("prepare")
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle({
+    short: { limit: 10, ttl: 1_000 },
+    default: { limit: 30, ttl: 60_000 },
+  })
   prepare(@Body() dto: PrepareTransactionDto, @Ip() ip: string) {
     return this.service.prepare(dto, ip);
   }
 
   @Post("submit")
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 15, ttl: 60_000 } })
+  @Throttle({
+    short: { limit: 5, ttl: 1_000 },
+    default: { limit: 15, ttl: 60_000 },
+  })
   submit(@Body() dto: SubmitTransactionDto, @Ip() ip: string) {
     return this.service.submit(dto, ip);
   }
 
   @Get(":hash")
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Throttle({
+    short: { limit: 20, ttl: 1_000 },
+    default: { limit: 60, ttl: 60_000 },
+  })
   status(@Param() params: TransactionHashParamDto) {
     return this.service.getStatus(params.hash);
   }

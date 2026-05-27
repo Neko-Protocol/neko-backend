@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { envValidationSchema } from "./config/env.validation";
 import { HealthModule } from "./modules/health/health.module";
 import { SupabaseModule } from "./modules/supabase/supabase.module";
 import { StellarModule } from "./modules/stellar/stellar.module";
@@ -11,13 +12,13 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validationSchema: envValidationSchema,
+      validationOptions: { abortEarly: false, allowUnknown: true },
     }),
+    // Per-endpoint overrides live on TransactionController.
     ThrottlerModule.forRoot([
-      {
-        name: "default",
-        ttl: 60_000,
-        limit: 60,
-      },
+      { name: "short", ttl: 1_000, limit: 20 },
+      { name: "default", ttl: 60_000, limit: 60 },
     ]),
     StellarModule,
     SupabaseModule,
