@@ -1,9 +1,11 @@
 import { Controller, Get } from "@nestjs/common";
+import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { HealthCheck, HealthCheckService } from "@nestjs/terminus";
 import { SkipThrottle } from "@nestjs/throttler";
 import { SorobanRpcHealthIndicator } from "./indicators/soroban-rpc.health";
 import { HorizonHealthIndicator } from "./indicators/horizon.health";
 
+@ApiTags("health")
 @Controller("health")
 @SkipThrottle()
 export class HealthController {
@@ -13,16 +15,18 @@ export class HealthController {
     private readonly horizon: HorizonHealthIndicator
   ) {}
 
-  // Cheap process-alive probe. No dependencies — safe for k8s livenessProbe.
   @Get("liveness")
+  @ApiOperation({ summary: "Process-alive probe (no dependency checks)." })
   liveness() {
     return { status: "ok", timestamp: new Date().toISOString() };
   }
 
-  // Deep readiness probe. Returns 503 if any dependency is down so the load
-  // balancer can rotate the instance out.
   @Get("readiness")
   @HealthCheck()
+  @ApiOperation({
+    summary:
+      "Readiness probe — pings Soroban RPC and Horizon, returns 503 if either is down.",
+  })
   readiness() {
     return this.health.check([
       () => this.soroban.isHealthy("soroban_rpc"),
@@ -30,8 +34,9 @@ export class HealthController {
     ]);
   }
 
-  // Back-compat alias — existing probes hit /health.
+  // Back-compat alias for probes that hit /health.
   @Get()
+  @ApiOperation({ summary: "Alias for /health/liveness." })
   legacy() {
     return this.liveness();
   }

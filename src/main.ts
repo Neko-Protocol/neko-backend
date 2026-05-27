@@ -1,6 +1,7 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import compression from "compression";
 import helmet from "helmet";
 import { Logger } from "nestjs-pino";
@@ -83,6 +84,15 @@ async function bootstrap() {
     })
   );
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  const swagger = new DocumentBuilder()
+    .setTitle("Neko Backend")
+    .setDescription("Neko DApp.")
+    .setVersion("1.0")
+    .build();
+  SwaggerModule.setup("docs", app, SwaggerModule.createDocument(app, swagger), {
+    swaggerOptions: { persistAuthorization: true },
+  });
 
   app.enableShutdownHooks();
 
