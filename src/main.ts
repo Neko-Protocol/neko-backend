@@ -79,6 +79,8 @@ async function bootstrap() {
     })
   );
 
+  app.enableShutdownHooks();
+
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port);
   Logger.log(`Neko backend listening on :${port}`, "Bootstrap");

@@ -16,9 +16,8 @@ export const envValidationSchema = Joi.object({
     .required(),
   STELLAR_RPC_AUTH_HEADER: Joi.string().optional().allow(""),
 
-  // Optional until a backend feature actually depends on Supabase.
-  SUPABASE_URL: Joi.string().uri().optional().allow(""),
-  SUPABASE_SERVICE_ROLE_KEY: Joi.string().optional().allow(""),
+  SUPABASE_URL: Joi.string().uri().required(),
+  SUPABASE_SERVICE_ROLE_KEY: Joi.string().min(1).required(),
 
   CORS_ORIGIN: Joi.string().optional().allow(""),
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
