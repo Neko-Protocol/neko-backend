@@ -41,9 +41,10 @@ export class TransactionService {
 
   async prepare(
     dto: PrepareTransactionDto,
-    ip: string
+    ip: string,
+    requestTraceId?: string
   ): Promise<TransactionPreparedDto> {
-    const traceId = randomUUID();
+    const traceId = requestTraceId ?? randomUUID();
     const start = Date.now();
 
     const { hash, sourceAccount, passphrase, ops } =
@@ -68,9 +69,10 @@ export class TransactionService {
 
   async submit(
     dto: SubmitTransactionDto,
-    ip: string
+    ip: string,
+    requestTraceId?: string
   ): Promise<TransactionStatusDto> {
-    const traceId = randomUUID();
+    const traceId = requestTraceId ?? randomUUID();
     const start = Date.now();
     const passphrase = this.rpc.getNetworkPassphrase();
 

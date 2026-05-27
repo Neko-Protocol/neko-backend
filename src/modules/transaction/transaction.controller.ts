@@ -7,8 +7,10 @@ import {
   Post,
   HttpCode,
   HttpStatus,
+  Req,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
+import type { Request } from "express";
 import { TransactionService } from "./transaction.service";
 import { PrepareTransactionDto } from "./dto/prepare-transaction.dto";
 import { SubmitTransactionDto } from "./dto/submit-transaction.dto";
@@ -24,8 +26,12 @@ export class TransactionController {
     short: { limit: 10, ttl: 1_000 },
     default: { limit: 30, ttl: 60_000 },
   })
-  prepare(@Body() dto: PrepareTransactionDto, @Ip() ip: string) {
-    return this.service.prepare(dto, ip);
+  prepare(
+    @Body() dto: PrepareTransactionDto,
+    @Ip() ip: string,
+    @Req() req: Request
+  ) {
+    return this.service.prepare(dto, ip, req.traceId);
   }
 
   @Post("submit")
@@ -34,8 +40,12 @@ export class TransactionController {
     short: { limit: 5, ttl: 1_000 },
     default: { limit: 15, ttl: 60_000 },
   })
-  submit(@Body() dto: SubmitTransactionDto, @Ip() ip: string) {
-    return this.service.submit(dto, ip);
+  submit(
+    @Body() dto: SubmitTransactionDto,
+    @Ip() ip: string,
+    @Req() req: Request
+  ) {
+    return this.service.submit(dto, ip, req.traceId);
   }
 
   @Get(":hash")
