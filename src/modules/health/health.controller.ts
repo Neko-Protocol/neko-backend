@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, VERSION_NEUTRAL } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { HealthCheck, HealthCheckService } from "@nestjs/terminus";
 import { SkipThrottle } from "@nestjs/throttler";
@@ -6,7 +6,7 @@ import { SorobanRpcHealthIndicator } from "./indicators/soroban-rpc.health";
 import { HorizonHealthIndicator } from "./indicators/horizon.health";
 
 @ApiTags("health")
-@Controller("health")
+@Controller({ path: "health", version: VERSION_NEUTRAL })
 @SkipThrottle()
 export class HealthController {
   constructor(
