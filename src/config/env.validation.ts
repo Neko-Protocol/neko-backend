@@ -9,7 +9,9 @@ export const envValidationSchema = Joi.object({
     .valid("fatal", "error", "warn", "info", "debug", "trace", "silent")
     .default("info"),
 
-  STELLAR_NETWORK: Joi.string().valid("mainnet", "testnet").required(),
+  STELLAR_NETWORK: Joi.string()
+    .pattern(/^(mainnet|testnet|public|pubnet|local)$/i)
+    .required(),
   STELLAR_NETWORK_PASSPHRASE: Joi.string().min(1).required(),
   STELLAR_RPC_URL: Joi.string()
     .uri({ scheme: ["http", "https"] })
