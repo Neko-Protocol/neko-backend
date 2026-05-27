@@ -16,9 +16,9 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
-import { PreparedTxCache } from "./prepared-tx-cache";
+import { PreparedTxCache } from "./cache/prepared-tx-cache";
 import { TransactionService } from "./transaction.service";
-import { XdrValidator } from "./xdr-validator";
+import { XdrValidator } from "./validation/xdr-validator";
 import { StellarRpcService } from "../stellar/stellar-rpc.service";
 
 const PASSPHRASE = Networks.PUBLIC;

@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { decodeSorobanError } from "../../../shared/stellar/soroban-error.decoder";
-import { SorobanContractException } from "../../../shared/stellar/soroban-contract.exception";
+import { decodeSorobanError } from "../../../shared/stellar/errors/soroban-error.decoder";
+import { SorobanContractException } from "../../../shared/stellar/errors/soroban-contract.exception";
 
 const isProd = () => process.env.NODE_ENV === "production";
 

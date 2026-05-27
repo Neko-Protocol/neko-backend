@@ -12,8 +12,8 @@ import {
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 import { StellarRpcService } from "../stellar/stellar-rpc.service";
-import { PreparedTxCache } from "./prepared-tx-cache";
-import { XdrValidator } from "./xdr-validator";
+import { PreparedTxCache } from "./cache/prepared-tx-cache";
+import { XdrValidator } from "./validation/xdr-validator";
 import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
 import { PrepareTransactionDto } from "./dto/prepare-transaction.dto";
 import { SubmitTransactionDto } from "./dto/submit-transaction.dto";

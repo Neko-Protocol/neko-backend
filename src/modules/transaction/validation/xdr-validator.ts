@@ -11,12 +11,12 @@ import {
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
-import { StellarRpcService } from "../stellar/stellar-rpc.service";
+import { StellarRpcService } from "../../stellar/stellar-rpc.service";
 import {
   getContractLabel,
   isAllowedContract,
   isAllowedFunction,
-} from "../../shared/stellar/contract-allowlist";
+} from "../../../shared/stellar/allowlist/contract-allowlist";
 
 export type ValidatedOp =
   | { kind: "invoke"; contractId: string; label: string; fnName: string }
