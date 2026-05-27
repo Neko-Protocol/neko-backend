@@ -1,10 +1,5 @@
 /**
  * Mainnet contract IDs the dApp is permitted to invoke through the relay.
- *
- * Soroswap router / factory IDs are resolved at runtime via the Soroswap SDK
- * (no compile-time constant in the frontend) and must be added here once the
- * production address is confirmed — without them /tx/prepare will reject
- * Soroswap deposit/withdraw flows.
  */
 
 export type ContractLabel = string;
@@ -61,6 +56,12 @@ export const CONTRACT_ALLOWLIST: ReadonlyMap<string, ContractLabel> = new Map([
   ["CBYTDU4JKTMFG5CNIUYJTOVMNIN5ADU2PDG4QWIUVT6SSVK3VTXYTF4K", "vault:USTRY-blend"],
   ["CCM3CKJI7BBMZ357644KLAE6NH4D7JQ6MUJHSV4UBRWJY7IMGHBJRNGR", "vault:USDC-blend"],
   ["CAXRLUOSI7DL3SYNZW5UGRIPVNRKKSZTW35OX5DWKZSJ4PFEVA2VEFCQ", "vault:TESOURO-blend"],
+
+  // ── Soroswap ───────────────────────────────────────────────────────────────
+  [
+    "CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH",
+    "soroswap:router",
+  ],
 
   // ── Aqua AMM ───────────────────────────────────────────────────────────────
   ["CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK", "aqua:router"],
