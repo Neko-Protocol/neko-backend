@@ -4,7 +4,6 @@ import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 import type { IncomingMessage } from "http";
-import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
 import { HealthModule } from "./modules/health/health.module";
@@ -58,10 +57,6 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: InternalApiKeyGuard,
     },
   ],
 })

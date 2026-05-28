@@ -2,14 +2,12 @@ import { Controller, Get, VERSION_NEUTRAL } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { HealthCheck, HealthCheckService } from "@nestjs/terminus";
 import { SkipThrottle } from "@nestjs/throttler";
-import { SkipAuth } from "../../common/decorators/skip-auth.decorator";
 import { SorobanRpcHealthIndicator } from "./indicators/soroban-rpc.health";
 import { HorizonHealthIndicator } from "./indicators/horizon.health";
 
 @ApiTags("health")
 @Controller({ path: "health", version: VERSION_NEUTRAL })
 @SkipThrottle()
-@SkipAuth()
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
