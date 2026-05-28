@@ -10,6 +10,7 @@ import { envValidationSchema } from "./config/env.validation";
 import { HealthModule } from "./modules/health/health.module";
 import { SupabaseModule } from "./modules/supabase/supabase.module";
 import { StellarModule } from "./modules/stellar/stellar.module";
+import { EtherfuseModule } from "./modules/etherfuse/etherfuse.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
 
 @Module({
@@ -52,6 +53,7 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
     StellarModule,
     SupabaseModule,
     HealthModule,
+    EtherfuseModule,
     TransactionModule,
   ],
   providers: [
