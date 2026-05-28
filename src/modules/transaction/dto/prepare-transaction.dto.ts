@@ -1,7 +1,8 @@
 import { ApiProperty } from "@nestjs/swagger";
+import type { PrepareTransactionRequest } from "@neko/api-contracts";
 import { IsBase64, IsString, MaxLength, MinLength } from "class-validator";
 
-export class PrepareTransactionDto {
+export class PrepareTransactionDto implements PrepareTransactionRequest {
   @ApiProperty({
     description: "Unsigned Soroban transaction envelope, base64-encoded XDR.",
     maxLength: 65536,
