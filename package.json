@@ -24,6 +24,7 @@
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.4.0",
+    "@neko/api-contracts": "*",
     "@stellar/stellar-sdk": "^14.5.0",
     "@supabase/supabase-js": "^2.106.0",
     "class-transformer": "^0.5.1",

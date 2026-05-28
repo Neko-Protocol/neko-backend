@@ -1,8 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import type {
+  TransactionStatus,
+  TransactionStatusError as TransactionStatusErrorContract,
+  TransactionStatusResponse,
+} from "@neko/api-contracts";
 
-export type TransactionStatus = "SUCCESS" | "FAILED" | "PENDING" | "NOT_FOUND";
+export type { TransactionStatus };
 
-export class TransactionStatusError {
+export class TransactionStatusError implements TransactionStatusErrorContract {
   @ApiProperty()
   code!: string;
 
@@ -10,7 +15,7 @@ export class TransactionStatusError {
   message?: string;
 }
 
-export class TransactionStatusDto {
+export class TransactionStatusDto implements TransactionStatusResponse {
   @ApiProperty({ enum: ["SUCCESS", "FAILED", "PENDING", "NOT_FOUND"] })
   status!: TransactionStatus;
 
