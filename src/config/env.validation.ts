@@ -26,4 +26,6 @@ export const envValidationSchema = Joi.object({
 
   CORS_ORIGIN: Joi.string().optional().allow(""),
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
+
+  INTERNAL_API_KEY: Joi.string().min(32).required(),
 });
