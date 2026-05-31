@@ -1,8 +1,10 @@
 import { Module } from "@nestjs/common";
-import { PoolRatesService } from "./pool-rates.service";
+import { PoolRatesController } from "./pool-rates.controller";
 import { PoolRatesCron } from "./pool-rates.cron";
+import { PoolRatesService } from "./pool-rates.service";
 
 @Module({
+  controllers: [PoolRatesController],
   providers: [PoolRatesService, PoolRatesCron],
   exports: [PoolRatesService],
 })
