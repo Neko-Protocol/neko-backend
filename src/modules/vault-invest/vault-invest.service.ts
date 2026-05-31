@@ -201,7 +201,7 @@ function legacyAliases(first: VaultKeeperResult | undefined): {
 export class VaultInvestService {
   private readonly logger = new Logger(VaultInvestService.name);
   private readonly lastInvest = new Map<string, number>();
-  private readonly secretKey: string;
+  private readonly secretKey: string | undefined;
   private readonly rpcUrl: string;
   private readonly networkPassphrase: string;
 
@@ -210,14 +210,23 @@ export class VaultInvestService {
   private static readonly TX_TIME_RESERVE_MS = 55_000;
 
   constructor(config: ConfigService) {
-    this.secretKey = config.getOrThrow<string>("VAULT_MANAGER_SECRET_KEY");
+    this.secretKey =
+      config.get<string>("VAULT_MANAGER_SECRET_KEY") || undefined;
     this.rpcUrl = config.getOrThrow<string>("STELLAR_RPC_URL");
     this.networkPassphrase = config.getOrThrow<string>(
       "STELLAR_NETWORK_PASSPHRASE"
     );
+    if (!this.secretKey) {
+      this.logger.warn(
+        "VAULT_MANAGER_SECRET_KEY not set — keeper runs will be skipped"
+      );
+    }
   }
 
   async runBatch(mode: KeeperMode): Promise<BatchKeeperResult> {
+    if (!this.secretKey) {
+      return { success: true, mode: "batch", vaults: [] };
+    }
     const configs = this.configuredBatchVaults();
     const vaults = await this.executeKeeper(configs, "batch", mode);
     const success = vaults.every((v) => v.success);
@@ -228,6 +237,16 @@ export class VaultInvestService {
     vaultId: string,
     mode: KeeperMode
   ): Promise<SingleVaultResult> {
+    if (!this.secretKey) {
+      return {
+        success: true,
+        mode: "single",
+        vaults: [],
+        invested: false,
+        results: [],
+        idleAmount: 0,
+      };
+    }
     const resolvedVaultId = resolveVaultIdForApi(vaultId);
     const config = resolvedVaultId
       ? getVaultRebalanceConfig(resolvedVaultId)
@@ -273,7 +292,7 @@ export class VaultInvestService {
     callMode: "batch" | "single",
     mode: KeeperMode
   ): Promise<VaultKeeperResult[]> {
-    if (configs.length === 0) {
+    if (configs.length === 0 || !this.secretKey) {
       return [];
     }
 
