@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { Cron, CronExpression } from "@nestjs/schedule";
+import { Cron } from "@nestjs/schedule";
 import { PoolRatesService } from "./pool-rates.service";
 
 @Injectable()
@@ -8,13 +8,13 @@ export class PoolRatesCron {
 
   constructor(private readonly svc: PoolRatesService) {}
 
-  @Cron(CronExpression.EVERY_HOUR, { name: "pool-rates-hourly" })
-  async hourly(): Promise<void> {
+  @Cron("*/30 * * * *", { name: "pool-rates-every-30min" })
+  async run(): Promise<void> {
     try {
       const { inserted } = await this.svc.recordOnce();
-      this.logger.log(`hourly run completed (inserted=${inserted})`);
+      this.logger.log(`pool-rates run completed (inserted=${inserted})`);
     } catch (err) {
-      this.logger.error(`hourly run failed: ${(err as Error).message}`);
+      this.logger.error(`pool-rates run failed: ${(err as Error).message}`);
     }
   }
 }
