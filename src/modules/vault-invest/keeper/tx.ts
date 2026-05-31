@@ -1,8 +1,8 @@
 import { Keypair, TransactionBuilder, rpc } from "@stellar/stellar-sdk";
 import { Client as DefindexVaultClient } from "@neko/defindex-vault";
 import type { ManagedFundsEntryLike } from "@neko/keeper";
-import { errorToString, unwrapSdkResult } from "./keeper-helpers";
-import type { AssembledTxLike, TxResult } from "./keeper-types";
+import { errorToString, unwrapSdkResult } from "./helpers";
+import type { AssembledTxLike, TxResult } from "./types";
 
 export async function fetchManagedFunds(
   client: DefindexVaultClient

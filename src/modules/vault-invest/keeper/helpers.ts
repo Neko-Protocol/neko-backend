@@ -10,7 +10,7 @@ import type {
   SdkResult,
   TxResult,
   VaultKeeperResult,
-} from "./keeper-types";
+} from "./types";
 
 export function unwrapSdkResult(raw: unknown): unknown {
   const r = raw as SdkResult;

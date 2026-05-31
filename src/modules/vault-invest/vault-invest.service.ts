@@ -10,7 +10,7 @@ import {
   resolveVaultIdForApi,
   type VaultRebalanceConfig,
 } from "@neko/keeper";
-import { collectFees } from "./keeper-fees";
+import { collectFees } from "./keeper/fees";
 import {
   buildRebalanceSummary,
   emptyFeesSummary,
@@ -18,8 +18,8 @@ import {
   legacyAliases,
   skippedRebalanceSummary,
   skippedVaultResult,
-} from "./keeper-helpers";
-import { fetchManagedFunds, sendTx } from "./keeper-tx";
+} from "./keeper/helpers";
+import { fetchManagedFunds, sendTx } from "./keeper/tx";
 import type {
   AssembledTxLike,
   BatchKeeperResult,
@@ -27,14 +27,14 @@ import type {
   SingleVaultResult,
   TxResult,
   VaultKeeperResult,
-} from "./keeper-types";
+} from "./keeper/types";
 
 export type {
   BatchKeeperResult,
   KeeperMode,
   SingleVaultResult,
   VaultKeeperResult,
-} from "./keeper-types";
+} from "./keeper/types";
 
 @Injectable()
 export class VaultInvestService {

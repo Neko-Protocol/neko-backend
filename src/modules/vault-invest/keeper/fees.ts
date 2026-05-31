@@ -1,8 +1,8 @@
 import { Keypair, rpc } from "@stellar/stellar-sdk";
 import { Client as DefindexVaultClient } from "@neko/defindex-vault";
-import { errorToString } from "./keeper-helpers";
-import { sendTx } from "./keeper-tx";
-import type { AssembledTxLike, FeesSummary, TxResult } from "./keeper-types";
+import { errorToString } from "./helpers";
+import { sendTx } from "./tx";
+import type { AssembledTxLike, FeesSummary, TxResult } from "./types";
 
 interface FeesContext {
   client: DefindexVaultClient;
