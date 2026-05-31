@@ -21,7 +21,6 @@ jest.mock("@neko/orchestrator", () => ({
   setContractErrorExtractor: setContractErrorExtractorMock,
 }));
 
-// Import after mock so the mocked module is used.
 import { OrchestratorService } from "./orchestrator.service";
 
 describe("OrchestratorService", () => {
