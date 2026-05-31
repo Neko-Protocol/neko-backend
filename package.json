@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@neko/api-contracts": "*",
+    "@neko/defindex-vault": "0.0.0",
     "@neko/keeper": "^0.0.0",
     "@neko/orchestrator": "^0.0.0",
     "@nestjs/common": "^10.4.15",

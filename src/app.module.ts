@@ -15,6 +15,7 @@ import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
 import { SupabaseModule } from "./modules/supabase/supabase.module";
 import { StellarModule } from "./modules/stellar/stellar.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
+import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
     TransactionModule,
     PoolRatesModule,
     AssetPricesModule,
+    VaultInvestModule,
   ],
   providers: [
     {

@@ -30,4 +30,12 @@ export const envValidationSchema = Joi.object({
   INTERNAL_API_KEY: Joi.string().min(32).required(),
 
   SOROSWAP_API_KEY: Joi.string().optional().allow(""),
+
+  // Vault keeper. Required because the @Cron job cannot sign rebalances
+  // without it. For dev environments that do not need the keeper, set a
+  // valid throwaway key; the cron will fail per-call but the app boots.
+  VAULT_MANAGER_SECRET_KEY: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .required(),
+  DEFINDEX_API_KEY: Joi.string().optional().allow(""),
 });

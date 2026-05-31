@@ -29,6 +29,7 @@ describe("POST /pool-rates/run-now (e2e)", () => {
     process.env.STELLAR_HORIZON_URL ??= "https://horizon.example";
     process.env.SUPABASE_URL ??= "https://stub.supabase.co";
     process.env.SUPABASE_SERVICE_ROLE_KEY ??= "stub";
+    process.env.VAULT_MANAGER_SECRET_KEY ??= "S" + "A".repeat(55);
 
     const mod = await Test.createTestingModule({
       imports: [AppModule],
