@@ -28,4 +28,6 @@ export const envValidationSchema = Joi.object({
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
 
   INTERNAL_API_KEY: Joi.string().min(32).required(),
+
+  SOROSWAP_API_KEY: Joi.string().optional().allow(""),
 });

@@ -8,6 +8,7 @@ import type { IncomingMessage } from "http";
 import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
+import { AssetPricesModule } from "./modules/asset-prices/asset-prices.module";
 import { HealthModule } from "./modules/health/health.module";
 import { OrchestratorModule } from "./modules/orchestrator/orchestrator.module";
 import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
@@ -59,6 +60,7 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
     HealthModule,
     TransactionModule,
     PoolRatesModule,
+    AssetPricesModule,
   ],
   providers: [
     {
