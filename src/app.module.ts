@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
+import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 import type { IncomingMessage } from "http";
@@ -9,6 +10,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
 import { HealthModule } from "./modules/health/health.module";
 import { OrchestratorModule } from "./modules/orchestrator/orchestrator.module";
+import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
 import { SupabaseModule } from "./modules/supabase/supabase.module";
 import { StellarModule } from "./modules/stellar/stellar.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
@@ -50,11 +52,13 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
       { name: "short", ttl: 1_000, limit: 20 },
       { name: "default", ttl: 60_000, limit: 60 },
     ]),
+    ScheduleModule.forRoot(),
     StellarModule,
     SupabaseModule,
     OrchestratorModule,
     HealthModule,
     TransactionModule,
+    PoolRatesModule,
   ],
   providers: [
     {
