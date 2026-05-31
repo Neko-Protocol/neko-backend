@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Keypair, TransactionBuilder, rpc } from "@stellar/stellar-sdk";
+import { Keypair, rpc } from "@stellar/stellar-sdk";
 import { Client as DefindexVaultClient } from "@neko/defindex-vault";
 import {
   getConfiguredRebalanceVaultIds,
@@ -8,194 +8,33 @@ import {
   parseAllVaultIds,
   planVaultRebalance,
   resolveVaultIdForApi,
-  type ManagedFundsEntryLike,
-  type PlannedInstruction,
-  type TargetAllocation,
   type VaultRebalanceConfig,
 } from "@neko/keeper";
+import { collectFees } from "./keeper-fees";
+import {
+  buildRebalanceSummary,
+  emptyFeesSummary,
+  errorToString,
+  legacyAliases,
+  skippedRebalanceSummary,
+  skippedVaultResult,
+} from "./keeper-helpers";
+import { fetchManagedFunds, sendTx } from "./keeper-tx";
+import type {
+  AssembledTxLike,
+  BatchKeeperResult,
+  KeeperMode,
+  SingleVaultResult,
+  TxResult,
+  VaultKeeperResult,
+} from "./keeper-types";
 
-export type KeeperMode = "cron" | "manual";
-
-type AssembledTxLike = {
-  simulation?: { error?: unknown };
-  toXDR(): string;
-};
-
-type SdkResult = {
-  tag?: string;
-  value?: unknown;
-  unwrap?: () => unknown;
-};
-
-export type TxResult = {
-  hash: string;
-  status: string;
-};
-
-export type FeesSummary = {
-  attempted: boolean;
-  results: Array<TxResult & { step: string }>;
-  feesCollected: boolean;
-};
-
-export type RebalanceSummary = {
-  attempted: boolean;
-  reason: string;
-  instructions: PlannedInstruction[];
-  hash: string;
-  status: string;
-  idleAmount: number;
-  idleAmountStroops: string;
-  totalAmount: number;
-  totalAmountStroops: string;
-  targetAllocations: TargetAllocation[];
-  canRebalance: boolean;
-};
-
-export type VaultKeeperResult = {
-  vaultId: string;
-  label: string;
-  success: boolean;
-  rebalance: RebalanceSummary;
-  fees: FeesSummary;
-  warnings: string[];
-};
-
-export type BatchKeeperResult = {
-  success: boolean;
-  mode: "batch";
-  vaults: VaultKeeperResult[];
-};
-
-export type SingleVaultResult = {
-  success: boolean;
-  mode: "single";
-  vaults: VaultKeeperResult[];
-  invested: boolean;
-  results: Array<{ strategy: string; hash: string; status: string }>;
-  idleAmount: number;
-  message?: string;
-};
-
-function unwrapSdkResult(raw: unknown): unknown {
-  const r = raw as SdkResult;
-  if (r?.tag === "ok") return r.value;
-  if (typeof r?.unwrap === "function") return r.unwrap();
-  return raw;
-}
-
-function errorToString(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return String(err);
-  }
-}
-
-function amountToHuman(amount: bigint): number {
-  return Number(amount) / 1e7;
-}
-
-function emptyFeesSummary(): FeesSummary {
-  return { attempted: false, results: [], feesCollected: false };
-}
-
-function skippedRebalanceSummary(
-  reason: string,
-  plan?: {
-    publicInstructions?: PlannedInstruction[];
-    targetAllocations?: TargetAllocation[];
-    idleAmount?: bigint;
-    totalAmount?: bigint;
-    canRebalance?: boolean;
-  }
-): RebalanceSummary {
-  const idleAmount = plan?.idleAmount ?? 0n;
-  const totalAmount = plan?.totalAmount ?? 0n;
-  return {
-    attempted: false,
-    reason,
-    instructions: plan?.publicInstructions ?? [],
-    hash: "",
-    status: "skipped",
-    idleAmount: amountToHuman(idleAmount),
-    idleAmountStroops: idleAmount.toString(),
-    totalAmount: amountToHuman(totalAmount),
-    totalAmountStroops: totalAmount.toString(),
-    targetAllocations: plan?.targetAllocations ?? [],
-    canRebalance: plan?.canRebalance ?? false,
-  };
-}
-
-function skippedVaultResult(
-  config: VaultRebalanceConfig,
-  reason: string,
-  warning?: string
-): VaultKeeperResult {
-  return {
-    vaultId: config.vaultId,
-    label: config.label,
-    success: false,
-    rebalance: skippedRebalanceSummary(reason),
-    fees: emptyFeesSummary(),
-    warnings: warning ? [warning] : [],
-  };
-}
-
-function buildRebalanceSummary(
-  plan: ReturnType<typeof planVaultRebalance>,
-  txResult?: TxResult
-): RebalanceSummary {
-  const attempted = plan.instructions.length > 0;
-  return {
-    attempted,
-    reason: plan.reason,
-    instructions: plan.publicInstructions,
-    hash: txResult?.hash ?? "",
-    status: attempted ? (txResult?.status ?? "not_submitted") : "skipped",
-    idleAmount: amountToHuman(plan.idleAmount),
-    idleAmountStroops: plan.idleAmount.toString(),
-    totalAmount: amountToHuman(plan.totalAmount),
-    totalAmountStroops: plan.totalAmount.toString(),
-    targetAllocations: plan.targetAllocations,
-    canRebalance: plan.canRebalance,
-  };
-}
-
-function legacyAliases(first: VaultKeeperResult | undefined): {
-  invested: boolean;
-  results: Array<{ strategy: string; hash: string; status: string }>;
-  idleAmount: number;
-  message?: string;
-} {
-  if (!first) {
-    return {
-      invested: false,
-      results: [],
-      idleAmount: 0,
-      message: "No vault processed",
-    };
-  }
-  const results = first.rebalance.attempted
-    ? [
-        {
-          strategy: first.label,
-          hash: first.rebalance.hash,
-          status: first.rebalance.status,
-        },
-      ]
-    : [];
-  return {
-    invested: first.rebalance.attempted,
-    results,
-    idleAmount: first.rebalance.idleAmount,
-    message: first.rebalance.attempted
-      ? undefined
-      : first.rebalance.reason.replaceAll("_", " "),
-  };
-}
+export type {
+  BatchKeeperResult,
+  KeeperMode,
+  SingleVaultResult,
+  VaultKeeperResult,
+} from "./keeper-types";
 
 @Injectable()
 export class VaultInvestService {
@@ -358,7 +197,7 @@ export class VaultInvestService {
     });
 
     try {
-      const funds = await this.fetchManagedFunds(client);
+      const funds = await fetchManagedFunds(client);
       const plan = planVaultRebalance(config, funds);
       warnings.push(...plan.warnings);
 
@@ -371,7 +210,12 @@ export class VaultInvestService {
           caller: keypair.publicKey(),
           instructions: plan.instructions,
         });
-        rebalanceTx = await this.sendTx(tx as AssembledTxLike, keypair, server);
+        rebalanceTx = await sendTx(
+          tx as AssembledTxLike,
+          keypair,
+          server,
+          this.networkPassphrase
+        );
         if (rebalanceTx.status !== "SUCCESS") {
           warnings.push(`Rebalance returned ${rebalanceTx.status}`);
         }
@@ -382,7 +226,13 @@ export class VaultInvestService {
         );
       }
 
-      const fees = await this.collectFees(client, keypair, server, deadlineMs);
+      const fees = await collectFees({
+        client,
+        keypair,
+        server,
+        networkPassphrase: this.networkPassphrase,
+        hasBudget: () => this.hasTransactionBudget(deadlineMs),
+      });
       if (!fees.feesCollected) {
         warnings.push("Fee collection did not complete successfully");
       }
@@ -395,8 +245,8 @@ export class VaultInvestService {
         vaultId: config.vaultId,
         label: config.label,
         // Fee distribution can fail due to protocol receiver setup (e.g.,
-        // missing trustline outside our vaults). Surface it as a warning but
-        // do not fail the keeper when rebalance/invest itself succeeded.
+        // missing trustline outside our vaults). Surface as warning instead
+        // of failing the vault when rebalance/invest itself succeeded.
         success: rebalanceOk,
         rebalance,
         fees,
@@ -415,140 +265,6 @@ export class VaultInvestService {
         fees: emptyFeesSummary(),
         warnings: [...warnings, message],
       };
-    }
-  }
-
-  private async fetchManagedFunds(
-    client: DefindexVaultClient
-  ): Promise<ManagedFundsEntryLike[]> {
-    const fundsTx = await client.fetch_total_managed_funds({ simulate: true });
-    return unwrapSdkResult(fundsTx.result) as ManagedFundsEntryLike[];
-  }
-
-  private async waitForTx(
-    server: rpc.Server,
-    hash: string
-  ): Promise<"SUCCESS" | "FAILED" | "TIMEOUT"> {
-    for (let i = 0; i < 25; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const status = await server.getTransaction(hash);
-      if (status.status === "SUCCESS") return "SUCCESS";
-      if (status.status === "FAILED") return "FAILED";
-    }
-    return "TIMEOUT";
-  }
-
-  private async sendTx(
-    assembledTx: AssembledTxLike,
-    keypair: Keypair,
-    server: rpc.Server
-  ): Promise<TxResult> {
-    if (assembledTx.simulation?.error) {
-      return {
-        hash: "",
-        status: `sim_error: ${errorToString(assembledTx.simulation.error)}`,
-      };
-    }
-
-    const builtTx = TransactionBuilder.fromXDR(
-      assembledTx.toXDR(),
-      this.networkPassphrase
-    );
-    const preparedTx = await server.prepareTransaction(builtTx);
-    preparedTx.sign(keypair);
-    const sendResult = await server.sendTransaction(preparedTx);
-    if (sendResult.status !== "PENDING") {
-      return { hash: sendResult.hash ?? "", status: "submit_error" };
-    }
-    const finalStatus = await this.waitForTx(server, sendResult.hash);
-    return { hash: sendResult.hash, status: finalStatus };
-  }
-
-  private async collectFees(
-    client: DefindexVaultClient,
-    keypair: Keypair,
-    server: rpc.Server,
-    deadlineMs?: number
-  ): Promise<FeesSummary> {
-    const results: Array<TxResult & { step: string }> = [];
-
-    if (!this.hasTransactionBudget(deadlineMs)) {
-      results.push({
-        step: "report",
-        hash: "",
-        status: "skipped_timeout_budget",
-      });
-      return { attempted: true, results, feesCollected: false };
-    }
-
-    try {
-      const reportTx = await client.report();
-      const r = await this.sendTx(reportTx as AssembledTxLike, keypair, server);
-      results.push({ step: "report", ...r });
-      if (r.status !== "SUCCESS") {
-        return { attempted: true, results, feesCollected: false };
-      }
-    } catch (e) {
-      results.push({
-        step: "report",
-        hash: "",
-        status: `error: ${errorToString(e)}`,
-      });
-      return { attempted: true, results, feesCollected: false };
-    }
-
-    if (!this.hasTransactionBudget(deadlineMs)) {
-      results.push({
-        step: "lock_fees",
-        hash: "",
-        status: "skipped_timeout_budget",
-      });
-      return { attempted: true, results, feesCollected: false };
-    }
-
-    try {
-      const lockTx = await client.lock_fees({ new_fee_bps: undefined });
-      const r = await this.sendTx(lockTx as AssembledTxLike, keypair, server);
-      results.push({ step: "lock_fees", ...r });
-      if (r.status !== "SUCCESS") {
-        return { attempted: true, results, feesCollected: false };
-      }
-    } catch (e) {
-      results.push({
-        step: "lock_fees",
-        hash: "",
-        status: `error: ${errorToString(e)}`,
-      });
-      return { attempted: true, results, feesCollected: false };
-    }
-
-    if (!this.hasTransactionBudget(deadlineMs)) {
-      results.push({
-        step: "distribute_fees",
-        hash: "",
-        status: "skipped_timeout_budget",
-      });
-      return { attempted: true, results, feesCollected: false };
-    }
-
-    try {
-      const distTx = await client.distribute_fees({
-        caller: keypair.publicKey(),
-      });
-      const r = await this.sendTx(distTx as AssembledTxLike, keypair, server);
-      results.push({ step: "distribute_fees", ...r });
-      return {
-        attempted: true,
-        results,
-        feesCollected: r.status === "SUCCESS",
-      };
-    } catch (e) {
-      results.push({
-        step: "distribute_fees",
-        hash: "",
-        status: `error: ${errorToString(e)}`,
-      });
-      return { attempted: true, results, feesCollected: false };
     }
   }
 }
