@@ -8,7 +8,6 @@ export class VaultInvestCron {
 
   constructor(private readonly svc: VaultInvestService) {}
 
-  // Every 30 minutes — minute 0 and 30 of each hour
   @Cron("*/30 * * * *", { name: "vault-invest-every-30min" })
   async run(): Promise<void> {
     try {

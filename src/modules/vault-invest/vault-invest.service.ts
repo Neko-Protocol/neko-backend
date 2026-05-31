@@ -204,9 +204,6 @@ export class VaultInvestService {
   private readonly secretKey: string;
   private readonly rpcUrl: string;
   private readonly networkPassphrase: string;
-  // Reserved for future DeFindex SDK calls (e.g., API-backed strategies).
-  // Currently unused by the keeper but documented as optional config.
-  private readonly defindexApiKey: string | undefined;
 
   private static readonly COOLDOWN_MS = 5 * 60 * 1000;
   private static readonly BATCH_TIME_BUDGET_MS = 280_000;
@@ -218,10 +215,8 @@ export class VaultInvestService {
     this.networkPassphrase = config.getOrThrow<string>(
       "STELLAR_NETWORK_PASSPHRASE"
     );
-    this.defindexApiKey = config.get<string>("DEFINDEX_API_KEY");
   }
 
-  /** Runs the keeper across all configured vaults. mode="cron" skips cooldown. */
   async runBatch(mode: KeeperMode): Promise<BatchKeeperResult> {
     const configs = this.configuredBatchVaults();
     const vaults = await this.executeKeeper(configs, "batch", mode);
@@ -229,7 +224,6 @@ export class VaultInvestService {
     return { success, mode: "batch", vaults };
   }
 
-  /** Runs the keeper against a single vault. mode="cron" skips cooldown. */
   async runSingle(
     vaultId: string,
     mode: KeeperMode

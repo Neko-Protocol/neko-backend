@@ -8,7 +8,6 @@ export class AssetPricesCron {
 
   constructor(private readonly svc: AssetPricesService) {}
 
-  // Every 30 minutes — minute 0 and 30 of each hour
   @Cron("*/30 * * * *", { name: "asset-prices-every-30min" })
   async run(): Promise<void> {
     try {
