@@ -1,7 +1,25 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Keypair, TransactionBuilder, rpc } from "@stellar/stellar-sdk";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
+// @neko/defindex-vault is ESM and the CJS interop loses its top-level Client.
+// TS with `module: commonjs` rewrites `await import()` into require(), so use
+// new Function() to preserve a real native import() at runtime.
+import type { Client as DefindexVaultClient } from "@neko/defindex-vault";
+
+const nativeImport = new Function("specifier", "return import(specifier);") as (
+  specifier: string
+) => Promise<unknown>;
+
+let cachedDefindexVaultClient: typeof DefindexVaultClient | null = null;
+async function loadDefindexVaultClient(): Promise<typeof DefindexVaultClient> {
+  if (cachedDefindexVaultClient) return cachedDefindexVaultClient;
+  const mod = (await nativeImport("@neko/defindex-vault")) as {
+    Client: typeof DefindexVaultClient;
+  };
+  cachedDefindexVaultClient = mod.Client;
+  return cachedDefindexVaultClient;
+}
+
 import {
   getConfiguredRebalanceVaultIds,
   getVaultRebalanceConfig,
@@ -350,7 +368,8 @@ export class VaultInvestService {
     deadlineMs?: number
   ): Promise<VaultKeeperResult> {
     const warnings: string[] = [];
-    const client = new DefindexVaultClient({
+    const ClientCtor = await loadDefindexVaultClient();
+    const client = new ClientCtor({
       contractId: config.vaultId,
       rpcUrl: this.rpcUrl,
       networkPassphrase: this.networkPassphrase,
