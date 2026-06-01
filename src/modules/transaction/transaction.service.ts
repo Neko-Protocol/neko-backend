@@ -15,6 +15,10 @@ import { StellarRpcService } from "../stellar/stellar-rpc.service";
 import { PreparedTxCache } from "./cache/prepared-tx-cache";
 import { XdrValidator } from "./validation/xdr-validator";
 import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
+import {
+  decodeTransactionResultXdr,
+  formatDecodedResult,
+} from "../../shared/stellar/errors/transaction-result.decoder";
 import { PrepareTransactionDto } from "./dto/prepare-transaction.dto";
 import { SubmitTransactionDto } from "./dto/submit-transaction.dto";
 import { TransactionPreparedDto } from "./dto/transaction-prepared.dto";
@@ -234,12 +238,13 @@ export class TransactionService {
     }
     if (resp.status === rpc.Api.GetTransactionStatus.FAILED) {
       const failed = resp as rpc.Api.GetFailedTransactionResponse;
+      const decoded = decodeTransactionResultXdr(failed.resultXdr);
       return {
         status: "FAILED",
         hash,
         error: {
           code: "TRANSACTION_FAILED",
-          message: isProd() ? undefined : failed.resultXdr?.toXDR("base64"),
+          message: decoded ? formatDecodedResult(decoded) : undefined,
         },
         traceId,
       };
