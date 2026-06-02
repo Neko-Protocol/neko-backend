@@ -28,4 +28,18 @@ export const envValidationSchema = Joi.object({
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
 
   INTERNAL_API_KEY: Joi.string().min(32).required(),
+
+  SOROSWAP_API_KEY: Joi.string().optional().allow(""),
+
+  VAULT_MANAGER_SECRET_KEY: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  DEFINDEX_API_KEY: Joi.string().optional().allow(""),
+
+  WEB_APP_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  CRON_SECRET: Joi.string().optional().allow(""),
 });

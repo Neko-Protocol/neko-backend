@@ -3,7 +3,6 @@ import {
   InternalServerErrorException,
   Logger,
 } from "@nestjs/common";
-import { Cron } from "@nestjs/schedule";
 import { StellarRpcService } from "../stellar/stellar-rpc.service";
 import { SupabaseService } from "../supabase/supabase.service";
 import { BlendPoolAdapter } from "./adapters/blend-pool.adapter";
@@ -85,18 +84,5 @@ export class PoolRatesService {
 
     this.logger.log(`recordRates: inserted ${filtered.length} rows`);
     return { inserted: filtered.length };
-  }
-
-  @Cron("0 * * * *")
-  async scheduledRecord(): Promise<void> {
-    this.logger.log("Scheduled pool rate recording starting");
-    try {
-      const result = await this.recordRates();
-      this.logger.log(
-        `Scheduled pool rate recording complete: inserted=${result.inserted}`
-      );
-    } catch (err) {
-      this.logger.error("Scheduled pool rate recording failed", err);
-    }
   }
 }

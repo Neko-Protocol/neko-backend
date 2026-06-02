@@ -1,0 +1,1 @@
+export const STELLAR_PRICE_SERVICE = Symbol("STELLAR_PRICE_SERVICE");

@@ -1,17 +1,23 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
+import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 import type { IncomingMessage } from "http";
 import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
+import { AssetPricesModule } from "./modules/asset-prices/asset-prices.module";
 import { HealthModule } from "./modules/health/health.module";
+import { OrchestratorModule } from "./modules/orchestrator/orchestrator.module";
+import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
 import { SupabaseModule } from "./modules/supabase/supabase.module";
 import { StellarModule } from "./modules/stellar/stellar.module";
 import { EtherfuseModule } from "./modules/etherfuse/etherfuse.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
+import { StrategyCatalogModule } from "./modules/strategy-catalog/strategy-catalog.module";
+import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
 
 @Module({
   imports: [
@@ -50,11 +56,17 @@ import { TransactionModule } from "./modules/transaction/transaction.module";
       { name: "short", ttl: 1_000, limit: 20 },
       { name: "default", ttl: 60_000, limit: 60 },
     ]),
+    ScheduleModule.forRoot(),
     StellarModule,
     SupabaseModule,
+    OrchestratorModule,
     HealthModule,
     EtherfuseModule,
     TransactionModule,
+    PoolRatesModule,
+    AssetPricesModule,
+    VaultInvestModule,
+    StrategyCatalogModule,
   ],
   providers: [
     {
