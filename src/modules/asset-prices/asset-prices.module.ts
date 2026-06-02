@@ -17,6 +17,6 @@ import { createStellarPriceService } from "./stellar-price.factory";
       useFactory: (config: ConfigService) => createStellarPriceService(config),
     },
   ],
-  exports: [AssetPricesService],
+  exports: [AssetPricesService, STELLAR_PRICE_SERVICE],
 })
 export class AssetPricesModule {}
