@@ -33,6 +33,7 @@ function isolateUrlCredentials(rawUrl: string): {
 export class StellarRpcService implements OnModuleInit {
   private readonly logger = new Logger(StellarRpcService.name);
   private _config!: StellarNetworkConfig;
+  private _safeRpcUrl!: string;
   private _rpc!: rpc.Server;
   private _horizon!: Horizon.Server;
 
@@ -42,6 +43,7 @@ export class StellarRpcService implements OnModuleInit {
     this._config = loadStellarNetworkConfig(this.configService);
 
     const { safeUrl, authHeader } = isolateUrlCredentials(this._config.rpcUrl);
+    this._safeRpcUrl = safeUrl;
     const headers: Record<string, string> = {};
     if (authHeader) headers.Authorization = authHeader;
     if (this._config.rpcAuthHeader) {
@@ -68,6 +70,10 @@ export class StellarRpcService implements OnModuleInit {
 
   getNetworkPassphrase(): string {
     return this._config.passphrase;
+  }
+
+  getSafeRpcUrl(): string {
+    return this._safeRpcUrl;
   }
 
   getNetwork(): string {
