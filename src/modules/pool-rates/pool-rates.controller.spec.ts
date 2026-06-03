@@ -1,23 +1,32 @@
 import { Test } from "@nestjs/testing";
-
-jest.mock("@neko/orchestrator", () => ({
-  createOrchestrator: jest.fn(),
-  setContractErrorExtractor: jest.fn(),
-}));
-
 import { PoolRatesController } from "./pool-rates.controller";
 import { PoolRatesService } from "./pool-rates.service";
 
 describe("PoolRatesController", () => {
-  it("delegates POST run-now to the service", async () => {
-    const svc = { recordOnce: jest.fn().mockResolvedValue({ inserted: 3 }) };
+  async function buildModule(svcOverrides: Partial<PoolRatesService>) {
     const mod = await Test.createTestingModule({
       controllers: [PoolRatesController],
-      providers: [{ provide: PoolRatesService, useValue: svc }],
+      providers: [{ provide: PoolRatesService, useValue: svcOverrides }],
     }).compile();
+    return mod.get(PoolRatesController);
+  }
 
-    const out = await mod.get(PoolRatesController).runNow();
-    expect(out).toEqual({ inserted: 3 });
-    expect(svc.recordOnce).toHaveBeenCalledTimes(1);
+  it("GET /:poolId delegates to getHistory", async () => {
+    const rows = [{ supply_apy: 4.5, borrow_apy: 6.0, recorded_at: "2024-01-01T00:00:00Z" }];
+    const ctrl = await buildModule({
+      getHistory: jest.fn().mockResolvedValue(rows),
+    } as unknown as PoolRatesService);
+
+    const result = await ctrl.getHistory({ poolId: "blend:pool1" });
+    expect(result).toEqual(rows);
+  });
+
+  it("POST /record delegates to recordRates", async () => {
+    const ctrl = await buildModule({
+      recordRates: jest.fn().mockResolvedValue({ inserted: 3 }),
+    } as unknown as PoolRatesService);
+
+    const result = await ctrl.recordRates();
+    expect(result).toEqual({ inserted: 3 });
   });
 });
