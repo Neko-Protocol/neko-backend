@@ -1,98 +1,113 @@
 import { Test } from "@nestjs/testing";
-
-// PoolRatesService transitively imports OrchestratorService, which imports
-// @neko/orchestrator (an ESM workspace package). Stub it so Jest's CJS loader
-// does not try to parse the ESM build — we only need the service contract.
-jest.mock("@neko/orchestrator", () => ({
-  createOrchestrator: jest.fn(),
-  setContractErrorExtractor: jest.fn(),
-}));
-
+import { InternalServerErrorException } from "@nestjs/common";
 import { PoolRatesService } from "./pool-rates.service";
-import { OrchestratorService } from "../orchestrator/orchestrator.service";
+import { StellarRpcService } from "../stellar/stellar-rpc.service";
 import { SupabaseService } from "../supabase/supabase.service";
 
+jest.mock("./adapters/blend-pool.adapter");
+jest.mock("./adapters/aqua-pool.adapter");
+
+import { BlendPoolAdapter } from "./adapters/blend-pool.adapter";
+import { AquaPoolAdapter } from "./adapters/aqua-pool.adapter";
+
+const mockStellar = {
+  getSafeRpcUrl: jest.fn().mockReturnValue("https://rpc.example.com"),
+  getNetworkPassphrase: jest.fn().mockReturnValue("Test SDF Network ; September 2015"),
+  getNetwork: jest.fn().mockReturnValue("testnet"),
+} as unknown as StellarRpcService;
+
+function makeSupabase(overrides: {
+  selectData?: object[];
+  selectError?: object | null;
+  insertError?: object | null;
+}) {
+  const { selectData = [], selectError = null, insertError = null } = overrides;
+  const insert = jest.fn().mockResolvedValue({ error: insertError });
+  const order = jest.fn().mockResolvedValue({ data: selectData, error: selectError });
+  const gte = jest.fn().mockReturnValue({ order });
+  const eq = jest.fn().mockReturnValue({ gte });
+  const select = jest.fn().mockReturnValue({ eq });
+  const from = jest.fn().mockReturnValue({ select, insert });
+  return { client: { from }, _insert: insert } as unknown as SupabaseService & {
+    _insert: jest.Mock;
+  };
+}
+
+async function buildModule(supabase: SupabaseService) {
+  const mod = await Test.createTestingModule({
+    providers: [
+      PoolRatesService,
+      { provide: StellarRpcService, useValue: mockStellar },
+      { provide: SupabaseService, useValue: supabase },
+    ],
+  }).compile();
+  return mod.get(PoolRatesService);
+}
+
 describe("PoolRatesService", () => {
-  it("inserts only pools with non-zero APY", async () => {
-    const insert = jest.fn().mockResolvedValue({ error: null });
-    const from = jest.fn().mockReturnValue({ insert });
-    const supabase = {
-      client: { from },
-    } as unknown as SupabaseService;
-    const orchestrator = {
-      orchestrator: {
-        getAllPools: jest.fn().mockResolvedValue([
-          { id: "blend:p:a", apy: 4.5, metadata: { borrowApy: 6.0 } },
-          { id: "soroswap:x", apy: 0, metadata: {} },
-          { id: "aqua:y", apy: 0, metadata: { borrowApy: 0 } },
-        ]),
-      },
-    } as unknown as OrchestratorService;
+  beforeEach(() => jest.clearAllMocks());
 
-    const mod = await Test.createTestingModule({
-      providers: [
-        PoolRatesService,
-        { provide: OrchestratorService, useValue: orchestrator },
-        { provide: SupabaseService, useValue: supabase },
-      ],
-    }).compile();
+  describe("getHistory", () => {
+    it("returns rate history for a pool", async () => {
+      const rows = [
+        { supply_apy: 4.5, borrow_apy: 6.0, recorded_at: "2024-01-01T00:00:00Z" },
+      ];
+      const svc = await buildModule(makeSupabase({ selectData: rows }));
+      const result = await svc.getHistory("blend:pool1");
+      expect(result).toEqual(rows);
+    });
 
-    const result = await mod.get(PoolRatesService).recordOnce();
-    expect(result.inserted).toBe(1);
-    expect(from).toHaveBeenCalledWith("pool_rate_history");
-    expect(insert).toHaveBeenCalledWith([
-      { pool_id: "blend:p:a", supply_apy: 4.5, borrow_apy: 6.0 },
-    ]);
+    it("throws InternalServerErrorException on Supabase error", async () => {
+      const svc = await buildModule(
+        makeSupabase({ selectError: { message: "db error" } })
+      );
+      await expect(svc.getHistory("blend:pool1")).rejects.toBeInstanceOf(
+        InternalServerErrorException
+      );
+    });
   });
 
-  it("returns inserted:0 when nothing matches", async () => {
-    const insert = jest.fn();
-    const supabase = {
-      client: { from: jest.fn().mockReturnValue({ insert }) },
-    } as unknown as SupabaseService;
-    const orchestrator = {
-      orchestrator: { getAllPools: jest.fn().mockResolvedValue([]) },
-    } as unknown as OrchestratorService;
+  describe("recordRates", () => {
+    it("inserts rows from blend and aqua adapters", async () => {
+      const blendRows = [{ pool_id: "blend:p1", supply_apy: 4.5, borrow_apy: 6.0 }];
+      const aquaRows = [{ pool_id: "aqua:p1", supply_apy: 2.1, borrow_apy: null }];
+      (BlendPoolAdapter as jest.MockedClass<typeof BlendPoolAdapter>).prototype.fetchRates =
+        jest.fn().mockResolvedValue(blendRows);
+      (AquaPoolAdapter as jest.MockedClass<typeof AquaPoolAdapter>).prototype.fetchRates =
+        jest.fn().mockResolvedValue(aquaRows);
 
-    const mod = await Test.createTestingModule({
-      providers: [
-        PoolRatesService,
-        { provide: OrchestratorService, useValue: orchestrator },
-        { provide: SupabaseService, useValue: supabase },
-      ],
-    }).compile();
+      const supabase = makeSupabase({});
+      const svc = await buildModule(supabase);
+      const result = await svc.recordRates();
 
-    expect((await mod.get(PoolRatesService).recordOnce()).inserted).toBe(0);
-    expect(insert).not.toHaveBeenCalled();
-  });
+      expect(result.inserted).toBe(2);
+      expect(supabase._insert).toHaveBeenCalledWith([...blendRows, ...aquaRows]);
+    });
 
-  it("propagates Supabase errors", async () => {
-    const insert = jest
-      .fn()
-      .mockResolvedValue({ error: { message: "db kaboom" } });
-    const supabase = {
-      client: { from: jest.fn().mockReturnValue({ insert }) },
-    } as unknown as SupabaseService;
-    const orchestrator = {
-      orchestrator: {
-        getAllPools: jest
-          .fn()
-          .mockResolvedValue([
-            { id: "blend:p:a", apy: 4.5, metadata: { borrowApy: 6.0 } },
-          ]),
-      },
-    } as unknown as OrchestratorService;
+    it("returns inserted:0 when all adapters return zero-APY pools", async () => {
+      (BlendPoolAdapter as jest.MockedClass<typeof BlendPoolAdapter>).prototype.fetchRates =
+        jest.fn().mockResolvedValue([{ pool_id: "x", supply_apy: 0, borrow_apy: 0 }]);
+      (AquaPoolAdapter as jest.MockedClass<typeof AquaPoolAdapter>).prototype.fetchRates =
+        jest.fn().mockResolvedValue([]);
 
-    const mod = await Test.createTestingModule({
-      providers: [
-        PoolRatesService,
-        { provide: OrchestratorService, useValue: orchestrator },
-        { provide: SupabaseService, useValue: supabase },
-      ],
-    }).compile();
+      const supabase = makeSupabase({});
+      const svc = await buildModule(supabase);
+      const result = await svc.recordRates();
 
-    await expect(mod.get(PoolRatesService).recordOnce()).rejects.toMatchObject({
-      message: "db kaboom",
+      expect(result.inserted).toBe(0);
+      expect(supabase._insert).not.toHaveBeenCalled();
+    });
+
+    it("throws InternalServerErrorException on Supabase insert error", async () => {
+      (BlendPoolAdapter as jest.MockedClass<typeof BlendPoolAdapter>).prototype.fetchRates =
+        jest.fn().mockResolvedValue([{ pool_id: "x", supply_apy: 5, borrow_apy: null }]);
+      (AquaPoolAdapter as jest.MockedClass<typeof AquaPoolAdapter>).prototype.fetchRates =
+        jest.fn().mockResolvedValue([]);
+
+      const svc = await buildModule(makeSupabase({ insertError: { message: "fail" } }));
+      await expect(svc.recordRates()).rejects.toBeInstanceOf(
+        InternalServerErrorException
+      );
     });
   });
 });

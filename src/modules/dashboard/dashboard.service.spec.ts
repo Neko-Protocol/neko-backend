@@ -287,14 +287,12 @@ describe("DashboardService", () => {
     it("queries the price service once per symbol and caches per symbol", async () => {
       const orchestrator = makeOrchestrator();
       const priceService = {
-        getPriceWithSource: jest
-          .fn()
-          .mockImplementation((symbol: string) =>
-            Promise.resolve({
-              price: symbol === "XLM" ? 0.1 : 1,
-              source: "reflector",
-            })
-          ),
+        getPriceWithSource: jest.fn().mockImplementation((symbol: string) =>
+          Promise.resolve({
+            price: symbol === "XLM" ? 0.1 : 1,
+            source: "reflector",
+          })
+        ),
       };
       const { svc } = build({ orchestrator, priceService });
 

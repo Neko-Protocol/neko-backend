@@ -11,7 +11,7 @@ export class PoolRatesCron {
   @Cron("*/30 * * * *", { name: "pool-rates-every-30min" })
   async run(): Promise<void> {
     try {
-      const { inserted } = await this.svc.recordOnce();
+      const { inserted } = await this.svc.recordRates();
       this.logger.log(`pool-rates run completed (inserted=${inserted})`);
     } catch (err) {
       this.logger.error(`pool-rates run failed: ${(err as Error).message}`);
