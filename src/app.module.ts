@@ -19,6 +19,7 @@ import { StellarModule } from "./modules/stellar/stellar.module";
 import { EtherfuseModule } from "./modules/etherfuse/etherfuse.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
 import { StrategyCatalogModule } from "./modules/strategy-catalog/strategy-catalog.module";
+import { UsersModule } from "./modules/users/users.module";
 import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
 
 @Module({
@@ -71,6 +72,7 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     DashboardModule,
     VaultInvestModule,
     StrategyCatalogModule,
+    UsersModule,
   ],
   providers: [
     {
