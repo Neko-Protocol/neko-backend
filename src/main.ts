@@ -1,3 +1,4 @@
+import { WebSocket } from "ws";
 import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
@@ -7,6 +8,13 @@ import helmet from "helmet";
 import { Logger } from "nestjs-pino";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { AppModule } from "./app.module";
+
+// Node.js < 22 has no global WebSocket; @supabase/supabase-js's realtime client
+// requires one at construction time. Polyfill it before any client is created.
+if (typeof globalThis.WebSocket === "undefined") {
+  (globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket =
+    WebSocket;
+}
 
 process.on("unhandledRejection", (reason, promise) => {
   // eslint-disable-next-line no-console
