@@ -8,6 +8,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import type { UserPreferences, UserPublic } from "@neko/api-contracts";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { ReferralsService } from "../referrals/referrals.service";
 import { SupabaseService } from "../supabase/supabase.service";
 import { EmailConfirmDto } from "./dto/email-confirm.dto";
 import { EmailStartDto } from "./dto/email-start.dto";
@@ -23,7 +24,8 @@ export class UsersService {
 
   constructor(
     private readonly supabase: SupabaseService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly referrals: ReferralsService
   ) {
     const url = this.config.get<string>("SUPABASE_URL");
     const anonKey = this.config.get<string>("SUPABASE_ANON_KEY");
@@ -80,6 +82,17 @@ export class UsersService {
             .update({ updated_at: new Date().toISOString() })
             .eq("wallet_address", wallet);
         }
+
+        return { ok: true };
+      }
+
+      // Referral attribution only on the first-ever insert, so an existing
+      // user reconnecting with someone's ref code can never be claimed.
+      if (dto.ref_code?.trim()) {
+        await this.referrals.attribute({
+          code: dto.ref_code,
+          referred_wallet: wallet,
+        });
       }
 
       return { ok: true };

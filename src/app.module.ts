@@ -8,6 +8,7 @@ import type { IncomingMessage } from "http";
 import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
+import { ActivationsModule } from "./modules/activations/activations.module";
 import { AssetPricesModule } from "./modules/asset-prices/asset-prices.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { HealthModule } from "./modules/health/health.module";
@@ -18,6 +19,7 @@ import { SupabaseModule } from "./modules/supabase/supabase.module";
 import { StellarModule } from "./modules/stellar/stellar.module";
 import { EtherfuseModule } from "./modules/etherfuse/etherfuse.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
+import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { StrategyCatalogModule } from "./modules/strategy-catalog/strategy-catalog.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
@@ -73,6 +75,8 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     VaultInvestModule,
     StrategyCatalogModule,
     UsersModule,
+    ActivationsModule,
+    ReferralsModule,
   ],
   providers: [
     {

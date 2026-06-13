@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import type { UserConnectEvent } from "@neko/api-contracts";
-import { IsOptional, IsString, MinLength } from "class-validator";
+import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class RegisterUserDto implements UserConnectEvent {
   @ApiProperty({ description: "Stellar wallet public key (G...)." })
@@ -15,4 +15,14 @@ export class RegisterUserDto implements UserConnectEvent {
   @IsOptional()
   @IsString()
   wallet_provider!: string | null;
+
+  @ApiProperty({
+    description: "Referral code the user arrived with, if any.",
+    nullable: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  ref_code?: string | null;
 }
