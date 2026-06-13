@@ -22,7 +22,9 @@ export class ReferralsController {
   }
 
   @Get("code")
-  @ApiOperation({ summary: "Get (or lazily create) the wallet's referral code." })
+  @ApiOperation({
+    summary: "Get (or lazily create) the wallet's referral code.",
+  })
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   getCode(@Query("wallet") wallet?: string) {
     return this.svc.getOrCreateCode(this.requireWallet(wallet));
@@ -35,6 +37,13 @@ export class ReferralsController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   getMe(@Query("wallet") wallet?: string) {
     return this.svc.getMe(this.requireWallet(wallet));
+  }
+
+  @Get("referred")
+  @ApiOperation({ summary: "List users referred by a given wallet (admin)." })
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  getReferred(@Query("wallet") wallet?: string) {
+    return this.svc.getReferred(this.requireWallet(wallet));
   }
 
   @Get("leaderboard")

@@ -27,6 +27,12 @@ export interface ReferralLeaderboardRow {
   vault_tvl_usd: number;
 }
 
+export interface ReferredUser {
+  referred_wallet: string;
+  status: string;
+  confirmed_at: string | null;
+}
+
 @Injectable()
 export class ReferralsService {
   private readonly logger = new Logger(ReferralsService.name);
@@ -185,6 +191,26 @@ export class ReferralsService {
       swap_volume_usd: Number(row?.swap_volume_usd ?? 0),
       vault_tvl_usd: Number(row?.vault_tvl_usd ?? 0),
     };
+  }
+
+  async getReferred(wallet: string): Promise<ReferredUser[]> {
+    const trimmed = wallet.trim();
+    const { data, error } = await this.supabase.client
+      .from("referrals")
+      .select("referred_wallet, status, confirmed_at")
+      .eq("referrer_wallet", trimmed)
+      .order("confirmed_at", { ascending: false });
+
+    if (error) {
+      this.logger.error(`getReferred failed: ${error.message}`);
+      throw new InternalServerErrorException({ code: "REFERRED_FAILED" });
+    }
+
+    return (data ?? []).map((row) => ({
+      referred_wallet: row.referred_wallet,
+      status: row.status,
+      confirmed_at: row.confirmed_at ?? null,
+    }));
   }
 
   async getLeaderboard(): Promise<ReferralLeaderboardRow[]> {
