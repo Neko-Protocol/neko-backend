@@ -8,10 +8,6 @@ const CODE = "ABCD2345";
 
 type DbResult = { data?: unknown; error?: unknown };
 
-/**
- * Builds a supabase-js stub whose chained calls all resolve through a
- * per-table queue of results, in call order.
- */
 function makeDb(results: Record<string, DbResult[]>) {
   const queues = new Map<string, DbResult[]>(
     Object.entries(results).map(([k, v]) => [k, [...v]])
@@ -80,16 +76,14 @@ describe("ReferralsService", () => {
       await expect(svc.getOrCreateCode(WALLET)).resolves.toEqual({
         code: CODE,
       });
-      expect(
-        db.calls.filter((c) => c.method === "insert")
-      ).toHaveLength(0);
+      expect(db.calls.filter((c) => c.method === "insert")).toHaveLength(0);
     });
 
     it("creates an 8-char code from the unambiguous alphabet", async () => {
       const db = makeDb({
         referral_codes: [
-          { data: null, error: null }, // no existing code
-          { data: null, error: null }, // insert ok
+          { data: null, error: null },
+          { data: null, error: null },
         ],
       });
       const svc = new ReferralsService(db.supabase);
@@ -121,7 +115,10 @@ describe("ReferralsService", () => {
       });
       const svc = new ReferralsService(db.supabase);
 
-      await svc.attribute({ code: ` ${CODE.toLowerCase()} `, referred_wallet: REFERRED });
+      await svc.attribute({
+        code: ` ${CODE.toLowerCase()} `,
+        referred_wallet: REFERRED,
+      });
 
       const insert = db.calls.find(
         (c) => c.table === "referrals" && c.method === "insert"
@@ -142,9 +139,7 @@ describe("ReferralsService", () => {
       await expect(
         svc.attribute({ code: "NOPE1234", referred_wallet: REFERRED })
       ).resolves.toBeUndefined();
-      expect(
-        db.calls.filter((c) => c.table === "referrals")
-      ).toHaveLength(0);
+      expect(db.calls.filter((c) => c.table === "referrals")).toHaveLength(0);
     });
 
     it("is a silent no-op for self-referral", async () => {
@@ -154,9 +149,7 @@ describe("ReferralsService", () => {
       const svc = new ReferralsService(db.supabase);
 
       await svc.attribute({ code: CODE, referred_wallet: WALLET });
-      expect(
-        db.calls.filter((c) => c.table === "referrals")
-      ).toHaveLength(0);
+      expect(db.calls.filter((c) => c.table === "referrals")).toHaveLength(0);
     });
 
     it("never throws even when the insert fails", async () => {

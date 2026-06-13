@@ -7,7 +7,6 @@ import {
 import { randomBytes } from "crypto";
 import { SupabaseService } from "../supabase/supabase.service";
 
-// No 0/O/1/I/L to keep codes easy to read aloud and retype.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const CODE_CREATE_RETRIES = 3;
@@ -43,7 +42,6 @@ export class ReferralsService {
     return code;
   }
 
-  /** Returns the wallet's referral code, creating one on first request. */
   async getOrCreateCode(wallet: string): Promise<{ code: string }> {
     const trimmed = wallet.trim();
     if (!trimmed) {

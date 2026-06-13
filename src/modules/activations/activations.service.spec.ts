@@ -9,11 +9,6 @@ const PARTICIPANT_ID = "22222222-2222-4222-8222-222222222222";
 
 type DbResult = { data?: unknown; error?: unknown };
 
-/**
- * Chainable supabase-js stub: every query-builder method returns the builder
- * and records the call; terminals (await/single/maybeSingle) consume a
- * per-table result queue in call order.
- */
 function makeDb(results: Record<string, DbResult[]>) {
   const queues = new Map<string, DbResult[]>(
     Object.entries(results).map(([k, v]) => [k, [...v]])
@@ -121,11 +116,9 @@ describe("ActivationsService", () => {
       const db = makeDb({
         activations: [
           { data: { id: ACTIVATION_ID }, error: null },
-          { data: null, error: null }, // delete rollback
+          { data: null, error: null },
         ],
-        activation_participants: [
-          { data: null, error: { message: "boom" } },
-        ],
+        activation_participants: [{ data: null, error: { message: "boom" } }],
       });
       const svc = buildService(db);
 
@@ -139,9 +132,7 @@ describe("ActivationsService", () => {
       ).rejects.toThrow();
 
       expect(
-        db.calls.some(
-          (c) => c.table === "activations" && c.method === "delete"
-        )
+        db.calls.some((c) => c.table === "activations" && c.method === "delete")
       ).toBe(true);
     });
   });
@@ -188,7 +179,7 @@ describe("ActivationsService", () => {
       expect(list[0].counts).toEqual({
         total: 4,
         pending: 1,
-        payable: 2, // 'paying' counts as payable in the summary
+        payable: 2,
         paid: 1,
       });
     });
