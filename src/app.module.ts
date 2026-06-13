@@ -8,6 +8,7 @@ import type { IncomingMessage } from "http";
 import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
+import { ActivationsModule } from "./modules/activations/activations.module";
 import { AssetPricesModule } from "./modules/asset-prices/asset-prices.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { HealthModule } from "./modules/health/health.module";
@@ -73,6 +74,7 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     VaultInvestModule,
     StrategyCatalogModule,
     UsersModule,
+    ActivationsModule,
   ],
   providers: [
     {
