@@ -1,4 +1,17 @@
 import { Test } from "@nestjs/testing";
+
+// StrategyCatalogService imports @neko/keeper (an ESM workspace package) that
+// Jest's CJS loader cannot parse; stub the named exports it touches.
+jest.mock("@neko/keeper", () => ({
+  getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),
+  getAssetsConfig: jest.fn().mockReturnValue({}),
+}));
+// OrchestratorService (imported transitively) loads @neko/orchestrator (ESM).
+jest.mock("@neko/orchestrator", () => ({
+  createOrchestrator: jest.fn(),
+  setContractErrorExtractor: jest.fn(),
+}));
+
 import { StrategyCatalogController } from "./strategy-catalog.controller";
 import { StrategyCatalogService } from "./strategy-catalog.service";
 
