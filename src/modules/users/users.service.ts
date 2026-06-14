@@ -218,6 +218,50 @@ export class UsersService {
     return { ok: true };
   }
 
+  /**
+   * Browser-navigated magic-link handler. Supabase email templates that send a
+   * `token_hash` directly point here; we verify server-side (no cookies) and the
+   * controller 302-redirects to the web-app /settings page.
+   */
+  async confirmEmailByTokenHash(
+    wallet: string | undefined,
+    tokenHash: string | undefined,
+    type: string | undefined
+  ): Promise<boolean> {
+    try {
+      if (!wallet || !tokenHash) return false;
+      if (!this.authClient) return false;
+
+      const { data, error } = await this.authClient.auth.verifyOtp({
+        type: (type as "magiclink" | "email") ?? "magiclink",
+        token_hash: tokenHash,
+      });
+      if (error || !data?.user?.email) return false;
+
+      const { error: updateError } = await this.supabase.client
+        .from("users")
+        .update({
+          email: data.user.email,
+          email_verified_at: new Date().toISOString(),
+          auth_user_id: data.user.id,
+        })
+        .eq("wallet_address", wallet);
+
+      return !updateError;
+    } catch (err) {
+      this.logger.warn(
+        `confirmEmailByTokenHash failed: ${(err as Error).message}`
+      );
+      return false;
+    }
+  }
+
+  /** Absolute URL of the web-app settings page used as the magic-link redirect. */
+  settingsRedirectUrl(status: "verified" | "error"): string {
+    const base = this.webAppBaseUrl ?? "";
+    return `${base}/settings?email=${status}`;
+  }
+
   async confirmEmail(dto: EmailConfirmDto): Promise<{ ok: true }> {
     const wallet = dto.wallet?.trim();
     const accessToken = dto.access_token?.trim();
