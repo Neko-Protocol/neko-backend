@@ -135,7 +135,7 @@ export class DefindexService {
         vaults: [],
         prices: {},
         error: "no_vault_ids",
-        hint: "Set DEFINDEX_VAULT_IDS with vault contract addresses.",
+        hint: "No DeFindex vault IDs configured in @neko/keeper for this network.",
       };
     }
 
