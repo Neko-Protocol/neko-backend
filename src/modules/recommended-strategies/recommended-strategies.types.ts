@@ -18,6 +18,20 @@ export type RecommendedStrategy = {
   updated_at: string;
 };
 
+/** camelCase shape consumed by the public simulator endpoint. */
+export type PublicRecommendedStrategy = {
+  id: string;
+  name: string;
+  description: string | null;
+  tokenCode: string;
+  destinationKind: DestinationKind;
+  destinationId: string;
+  stackKind: DestinationKind | null;
+  stackId: string | null;
+  amount: string | null;
+  snapshotApy: number | null;
+};
+
 export type CatalogDestination = {
   kind: DestinationKind;
   id: string;

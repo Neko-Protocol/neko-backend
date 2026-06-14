@@ -7,6 +7,7 @@ import {
 import {
   CatalogDestination,
   DestinationKind,
+  PublicRecommendedStrategy,
   RecommendedStrategy,
   isDestinationKind,
 } from "./recommended-strategies.types";
@@ -128,6 +129,39 @@ export class RecommendedStrategiesService {
         protocol: String(row.protocol ?? ""),
         apy: parseNullableNumber(row.apy),
         acceptedTokenCodes,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Public, simulator-facing list: only active strategies, mapped to the
+   * camelCase DTO shape the web-app consumes.
+   */
+  async listPublic(): Promise<PublicRecommendedStrategy[]> {
+    const { data, error } = await this.supabase.client
+      .from("recommended_strategies")
+      .select("*")
+      .eq("is_active", true)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error || !data?.length) return [];
+
+    const out: PublicRecommendedStrategy[] = [];
+    for (const row of data as Record<string, unknown>[]) {
+      const mapped = this.mapRow(row);
+      if (!mapped) continue;
+      out.push({
+        id: mapped.id,
+        name: mapped.name,
+        description: mapped.description,
+        tokenCode: mapped.token_code,
+        destinationKind: mapped.destination_kind,
+        destinationId: mapped.destination_id,
+        stackKind: mapped.stack_kind,
+        stackId: mapped.stack_id,
+        amount: mapped.amount === null ? null : String(mapped.amount),
+        snapshotApy: mapped.snapshot_apy,
       });
     }
     return out;
