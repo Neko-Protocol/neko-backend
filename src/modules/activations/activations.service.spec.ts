@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { EmailService } from "../email/email.service";
 import { StellarRpcService } from "../stellar/stellar-rpc.service";
 import { SupabaseService } from "../supabase/supabase.service";
 import { ActivationsService } from "./activations.service";
@@ -80,8 +81,20 @@ function makeStellar(): StellarRpcService {
   } as unknown as StellarRpcService;
 }
 
+function makeEmail(): EmailService {
+  return {
+    send: jest.fn(),
+    sendBatch: jest.fn(),
+  } as unknown as EmailService;
+}
+
 function buildService(db: ReturnType<typeof makeDb>) {
-  return new ActivationsService(db.supabase, makeStellar(), makeConfig());
+  return new ActivationsService(
+    db.supabase,
+    makeStellar(),
+    makeConfig(),
+    makeEmail()
+  );
 }
 
 describe("ActivationsService", () => {
