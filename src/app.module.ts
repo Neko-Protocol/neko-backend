@@ -9,7 +9,6 @@ import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
 import { ActivationsModule } from "./modules/activations/activations.module";
-import { AnchorModule } from "./modules/anchor/anchor.module";
 import { AdminAuthModule } from "./modules/admin-auth/admin-auth.module";
 import { AdminDashboardModule } from "./modules/admin-dashboard/admin-dashboard.module";
 import { AdminStrategiesModule } from "./modules/admin-strategies/admin-strategies.module";
@@ -88,7 +87,6 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     VaultApyModule,
     AssetPricesModule,
     AuditModule,
-    AnchorModule,
     DashboardModule,
     DefindexModule,
     VaultInvestModule,
