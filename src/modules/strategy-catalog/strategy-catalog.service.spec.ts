@@ -1,8 +1,5 @@
 import { ConfigService } from "@nestjs/config";
 
-// StrategyCatalogService imports @neko/keeper (an ESM workspace package) that
-// Jest's CJS loader cannot parse; stub the named exports it touches. The
-// CETES/USTRY/TESOURO entries drive the yield-token destinations.
 jest.mock("@neko/keeper", () => ({
   getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),
   getAssetsConfig: jest.fn().mockReturnValue({
@@ -11,7 +8,6 @@ jest.mock("@neko/keeper", () => ({
     TESOURO: { contract: "C_TESOURO_FAKE", name: "Tesouro" },
   }),
 }));
-// OrchestratorService (imported transitively) loads @neko/orchestrator (ESM).
 jest.mock("@neko/orchestrator", () => ({
   createOrchestrator: jest.fn(),
   setContractErrorExtractor: jest.fn(),
@@ -83,7 +79,6 @@ describe("StrategyCatalogService", () => {
 
     const result = await svc.refresh();
 
-    // 1 pool + 1 vault + the configured Etherfuse bond tokens.
     expect(result.upserted).toBeGreaterThanOrEqual(2);
     expect(upsert).toHaveBeenCalledTimes(1);
     const rows = upsert.mock.calls[0][0] as AnyRecord[];
