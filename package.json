@@ -17,6 +17,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@blend-capital/blend-sdk": "^3.2.2",
     "@neko/api-contracts": "*",
     "@neko/defindex-vault": "0.0.0",
     "@neko/keeper": "^0.0.0",
