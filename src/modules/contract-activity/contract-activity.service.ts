@@ -49,7 +49,7 @@ function tryDecodeAmount(bodyXdrBase64: string): number | null {
 }
 
 @Injectable()
-export class PoolActivityService {
+export class ContractActivityService {
   async getActivity(poolId: string): Promise<PoolEvent[]> {
     const contractId = extractContractId(decodeURIComponent(poolId));
     const url = `https://api.stellar.expert/explorer/public/contract/${contractId}/events?limit=200&order=desc`;

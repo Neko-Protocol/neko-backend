@@ -2,12 +2,12 @@ import { Controller, Get, Param } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { PoolIdParamDto } from "../pool-rates/dto/pool-id-param.dto";
-import { PoolActivityService } from "./pool-activity.service";
+import { ContractActivityService } from "./contract-activity.service";
 
-@ApiTags("pool-activity")
-@Controller("pool-activity")
-export class PoolActivityController {
-  constructor(private readonly svc: PoolActivityService) {}
+@ApiTags("contract-activity")
+@Controller("contract-activity")
+export class ContractActivityController {
+  constructor(private readonly svc: ContractActivityService) {}
 
   @Get(":poolId")
   @Throttle({

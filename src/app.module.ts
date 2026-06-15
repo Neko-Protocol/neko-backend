@@ -23,7 +23,7 @@ import { RecommendedStrategiesModule } from "./modules/recommended-strategies/re
 import { SegmentsModule } from "./modules/segments/segments.module";
 import { HealthModule } from "./modules/health/health.module";
 import { OrchestratorModule } from "./modules/orchestrator/orchestrator.module";
-import { PoolActivityModule } from "./modules/pool-activity/pool-activity.module";
+import { ContractActivityModule } from "./modules/contract-activity/contract-activity.module";
 import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
 import { VaultPpsModule } from "./modules/vault-pps/vault-pps.module";
 import { SupabaseModule } from "./modules/supabase/supabase.module";
@@ -82,7 +82,7 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     EtherfuseModule,
     TransactionModule,
     PoolRatesModule,
-    PoolActivityModule,
+    ContractActivityModule,
     VaultPpsModule,
     VaultApyModule,
     AssetPricesModule,
