@@ -30,12 +30,6 @@ const POOL_PROTOCOL_LABEL: Record<PoolType, string> = {
 };
 
 const ETHERFUSE_BOND_SYMBOLS = ["CETES", "USTRY", "TESOURO"] as const;
-type EtherfuseBondSymbol = (typeof ETHERFUSE_BOND_SYMBOLS)[number];
-const FALLBACK_APY: Record<EtherfuseBondSymbol, number> = {
-  CETES: 9.5,
-  USTRY: 4.8,
-  TESOURO: 13.5,
-};
 
 @Injectable()
 export class StrategyCatalogService {
@@ -108,7 +102,7 @@ export class StrategyCatalogService {
         kind: "yield-token",
         id: cfg.contract,
         name: cfg.name,
-        apy: FALLBACK_APY[symbol],
+        apy: null,
         acceptedTokenCodes: [symbol],
         protocol: "Sovereign Bond",
       });
