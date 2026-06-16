@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEmail,
   IsNumber,
@@ -25,7 +26,9 @@ export class CreateActivationDto {
   @IsPositive()
   reward_xlm!: number;
 
-  @ApiProperty({ description: "ISO timestamp after which verifications no longer count." })
+  @ApiProperty({
+    description: "ISO timestamp after which verifications no longer count.",
+  })
   @IsDateString()
   expires_at!: string;
 
@@ -36,9 +39,20 @@ export class CreateActivationDto {
   @IsEmail({}, { each: true })
   emails!: string[];
 
-  @ApiProperty({ description: "Admin identifier creating the activation.", required: false })
+  @ApiProperty({
+    description: "Admin identifier creating the activation.",
+    required: false,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(200)
   created_by?: string;
+
+  @ApiProperty({
+    description: "Email an invitation to each participant on creation.",
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  send_invites?: boolean;
 }

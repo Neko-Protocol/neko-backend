@@ -9,22 +9,30 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
-  Asset,
   BASE_FEE,
   Memo,
-  Operation,
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
+import {
+  buildNativePaymentOperation,
+  matchesNativePayout,
+  parseSignedTransaction,
+} from "../../shared/stellar/payment-xdr";
 import { StellarRpcService } from "../stellar/stellar-rpc.service";
 import { SupabaseService } from "../supabase/supabase.service";
+import { EmailService } from "../email/email.service";
 import { CreateActivationDto } from "./dto/create-activation.dto";
+import { PrepareBatchPayoutDto } from "./dto/prepare-batch-payout.dto";
 import { PreparePayoutDto } from "./dto/prepare-payout.dto";
+import { SubmitBatchPayoutDto } from "./dto/submit-batch-payout.dto";
 import { SubmitPayoutDto } from "./dto/submit-payout.dto";
 
 const PAYOUT_MEMO = "neko-activation";
 const STALE_PAYING_MS = 10 * 60 * 1000;
 const FEE_MULTIPLIER = 10;
+const ACTIVATION_INVITE_TEMPLATE = "activation-invite";
+const ACTIVATION_PAYOUT_TEMPLATE = "activation-payout";
 
 export interface ActivationSummary {
   id: string;
@@ -56,7 +64,8 @@ export class ActivationsService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly stellar: StellarRpcService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly email: EmailService
   ) {}
 
   private dbNetwork(): string {
@@ -104,9 +113,7 @@ export class ActivationsService {
 
     const { error: participantsError } = await this.supabase.client
       .from("activation_participants")
-      .insert(
-        emails.map((email) => ({ activation_id: activation.id, email }))
-      );
+      .insert(emails.map((email) => ({ activation_id: activation.id, email })));
 
     if (participantsError) {
       await this.supabase.client
@@ -119,7 +126,29 @@ export class ActivationsService {
       throw new InternalServerErrorException({ code: "CREATE_FAILED" });
     }
 
+    if (dto.send_invites) {
+      await this.sendInviteEmails(activation, emails);
+    }
+
     return { ...activation, email_count: emails.length };
+  }
+
+  async sendInvites(activationId: string): Promise<{ sent: number }> {
+    const activation = await this.loadActivation(activationId);
+
+    const { data: rows, error } = await this.supabase.client
+      .from("activation_participants")
+      .select("email")
+      .eq("activation_id", activationId)
+      .eq("status", "pending");
+
+    if (error) {
+      throw new InternalServerErrorException({ code: "GET_FAILED" });
+    }
+
+    const emails = (rows ?? []).map((r) => r.email as string);
+    await this.sendInviteEmails(activation, emails);
+    return { sent: emails.length };
   }
 
   async list(): Promise<ActivationSummary[]> {
@@ -277,16 +306,11 @@ export class ActivationsService {
         networkPassphrase: this.stellar.getNetworkPassphrase(),
       })
         .addOperation(
-          destinationExists
-            ? Operation.payment({
-                destination,
-                asset: Asset.native(),
-                amount,
-              })
-            : Operation.createAccount({
-                destination,
-                startingBalance: amount,
-              })
+          buildNativePaymentOperation({
+            destination,
+            amount,
+            createAccount: !destinationExists,
+          })
         )
         .addMemo(Memo.text(PAYOUT_MEMO))
         .setTimeout(300)
@@ -352,6 +376,15 @@ export class ActivationsService {
 
       await this.recordPayoutAudit(participant, rewardXlm, result.hash);
 
+      await this.sendPayoutConfirmation({
+        to: participant.email,
+        activationName: activation.name,
+        amountXlm: rewardXlm,
+        wallet: participant.matched_wallet!,
+        txHash: result.hash,
+        paidAtISO: new Date().toISOString(),
+      });
+
       return {
         ok: true,
         tx_hash: result.hash,
@@ -375,6 +408,232 @@ export class ActivationsService {
   async cancelPayout(participantId: string) {
     await this.unlock(participantId);
     return { ok: true };
+  }
+
+  async prepareBatchPayout(dto: PrepareBatchPayoutDto) {
+    const activation = await this.loadActivation(dto.activation_id);
+    const rewardXlm = Number(activation.reward_xlm);
+
+    const { data: payableRows, error: listError } = await this.supabase.client
+      .from("activation_participants")
+      .select("*")
+      .eq("activation_id", dto.activation_id)
+      .eq("status", "payable")
+      .order("matched_at", { ascending: true });
+
+    if (listError) {
+      throw new InternalServerErrorException({ code: "GET_FAILED" });
+    }
+    if (!payableRows?.length) {
+      throw new UnprocessableEntityException({
+        code: "NO_PAYABLE",
+        message: "No payable participants for this activation.",
+      });
+    }
+
+    const remainingPayable = Math.max(0, payableRows.length - 100);
+    const chunk = payableRows.slice(0, 100);
+    const eligible = chunk.filter(
+      (p) => p.matched_wallet && p.matched_wallet !== dto.admin_wallet
+    );
+
+    if (!eligible.length) {
+      throw new UnprocessableEntityException({
+        code: "SELF_PAYOUT_ONLY",
+        message: "All participants in this chunk pay to the admin wallet.",
+      });
+    }
+
+    const locked: typeof eligible = [];
+    for (const participant of eligible) {
+      const ok = await this.tryLockForPaying(participant);
+      if (ok) locked.push(participant);
+    }
+
+    if (!locked.length) {
+      throw new ConflictException({
+        code: "ALL_LOCKED",
+        message: "All eligible participants are already being paid.",
+      });
+    }
+
+    const lockedIds = locked.map((p) => p.id);
+
+    try {
+      const horizon = this.stellar.horizon;
+      const source = await horizon.loadAccount(dto.admin_wallet);
+      const amount = rewardXlm.toFixed(7);
+      const included: typeof locked = [];
+      const operations: ReturnType<typeof buildNativePaymentOperation>[] = [];
+
+      for (const participant of locked) {
+        const destination = participant.matched_wallet!;
+        let destinationExists = true;
+        try {
+          await horizon.loadAccount(destination);
+        } catch (err) {
+          if (this.isHorizonNotFound(err)) destinationExists = false;
+          else throw err;
+        }
+
+        if (!destinationExists && rewardXlm < 1) {
+          await this.unlock(participant.id);
+          continue;
+        }
+
+        included.push(participant);
+        operations.push(
+          buildNativePaymentOperation({
+            destination,
+            amount,
+            createAccount: !destinationExists,
+          })
+        );
+      }
+
+      if (!operations.length) {
+        throw new UnprocessableEntityException({
+          code: "NO_ELIGIBLE",
+          message:
+            "No participants could be included (e.g. unfunded accounts below 1 XLM).",
+        });
+      }
+
+      const opCount = operations.length;
+      let builder = new TransactionBuilder(source, {
+        fee: (parseInt(BASE_FEE, 10) * opCount * FEE_MULTIPLIER).toString(),
+        networkPassphrase: this.stellar.getNetworkPassphrase(),
+      })
+        .addMemo(Memo.text(PAYOUT_MEMO))
+        .setTimeout(300);
+
+      for (const op of operations) {
+        builder = builder.addOperation(op);
+      }
+
+      const tx = builder.build();
+
+      return {
+        activation_id: dto.activation_id,
+        xdr: tx.toXDR(),
+        network_passphrase: this.stellar.getNetworkPassphrase(),
+        participant_ids: included.map((p) => p.id),
+        reward_xlm: rewardXlm,
+        op_count: opCount,
+        remaining_payable: remainingPayable,
+      };
+    } catch (err) {
+      await Promise.all(lockedIds.map((id) => this.unlock(id)));
+      if (
+        err instanceof UnprocessableEntityException ||
+        err instanceof ConflictException
+      ) {
+        throw err;
+      }
+      if (this.isHorizonNotFound(err)) {
+        throw new UnprocessableEntityException({
+          code: "ADMIN_ACCOUNT_NOT_FOUND",
+          message: "Paying account not found on the network.",
+        });
+      }
+      this.logger.error(`prepareBatchPayout failed: ${String(err)}`);
+      throw new BadGatewayException({ code: "HORIZON_ERROR" });
+    }
+  }
+
+  async submitBatchPayout(dto: SubmitBatchPayoutDto) {
+    const activation = await this.loadActivation(dto.activation_id);
+    const rewardXlm = Number(activation.reward_xlm);
+
+    const { data: rows, error } = await this.supabase.client
+      .from("activation_participants")
+      .select("*")
+      .in("id", dto.participant_ids)
+      .eq("activation_id", dto.activation_id);
+
+    if (error) {
+      throw new InternalServerErrorException({ code: "GET_FAILED" });
+    }
+
+    const paying = (rows ?? []).filter(
+      (p) => p.status === "paying" && p.matched_wallet
+    );
+
+    if (!paying.length) {
+      throw new ConflictException({
+        code: "NOT_PAYING",
+        message: "No participants in 'paying' state for this batch.",
+      });
+    }
+
+    let tx: Transaction;
+    try {
+      tx = this.parseAndValidateBatchXdr(dto.signed_xdr, paying, rewardXlm);
+    } catch (err) {
+      if (err instanceof UnprocessableEntityException) {
+        await Promise.all(paying.map((p) => this.unlock(p.id)));
+      }
+      throw err;
+    }
+
+    try {
+      const result = await this.stellar.horizon.submitTransaction(tx);
+      let paid = 0;
+      const covered: typeof paying = [];
+
+      for (const participant of paying) {
+        const { data: updated } = await this.supabase.client
+          .from("activation_participants")
+          .update({
+            status: "paid",
+            paid_tx_hash: result.hash,
+            paid_by: tx.source,
+            paid_at: new Date().toISOString(),
+            paid_amount_xlm: rewardXlm,
+            payout_started_at: null,
+          })
+          .eq("id", participant.id)
+          .eq("status", "paying")
+          .select("id");
+
+        if (updated?.length) {
+          paid += 1;
+          covered.push(participant);
+          await this.recordPayoutAudit(participant, rewardXlm, result.hash);
+        } else {
+          this.logger.warn(
+            `batch payout submitted but row ${participant.id} was not in 'paying' state`
+          );
+        }
+      }
+
+      await Promise.allSettled(
+        covered.map((participant) =>
+          this.sendPayoutConfirmation({
+            to: participant.email,
+            activationName: activation.name,
+            amountXlm: rewardXlm,
+            wallet: participant.matched_wallet!,
+            txHash: result.hash,
+            paidAtISO: new Date().toISOString(),
+          })
+        )
+      );
+
+      return { ok: true, tx_hash: result.hash, paid };
+    } catch (err) {
+      await Promise.all(paying.map((p) => this.unlock(p.id)));
+      const codes = this.extractHorizonResultCodes(err);
+      this.logger.error(
+        `submitBatchPayout failed for activation ${dto.activation_id}: ${codes ?? String(err)}`
+      );
+      throw new BadGatewayException({
+        code: "SUBMIT_FAILED",
+        message: codes
+          ? `Transaction rejected: ${codes}`
+          : "Failed to submit the payment to the network.",
+      });
+    }
   }
 
   // ---- helpers ----
@@ -444,12 +703,39 @@ export class ActivationsService {
     });
   }
 
+  private async tryLockForPaying(participant: {
+    id: string;
+    status: string;
+    payout_started_at: string | null;
+  }): Promise<boolean> {
+    try {
+      await this.lockForPaying(participant);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async unlock(participantId: string) {
     await this.supabase.client
       .from("activation_participants")
       .update({ status: "payable", payout_started_at: null })
       .eq("id", participantId)
       .eq("status", "paying");
+  }
+
+  private parseTransactionFromXdr(signedXdr: string): Transaction {
+    const tx = parseSignedTransaction(
+      signedXdr,
+      this.stellar.getNetworkPassphrase()
+    );
+    if (!tx) {
+      throw new UnprocessableEntityException({
+        code: "INVALID_XDR",
+        message: "Could not parse the signed transaction.",
+      });
+    }
+    return tx;
   }
 
   /**
@@ -461,37 +747,15 @@ export class ActivationsService {
     participant: { matched_wallet: string | null },
     rewardXlm: number
   ): Transaction {
-    let tx: Transaction;
-    try {
-      const parsed = TransactionBuilder.fromXDR(
-        signedXdr,
-        this.stellar.getNetworkPassphrase()
-      );
-      if (!(parsed instanceof Transaction)) {
-        throw new Error("fee-bump transactions are not supported");
-      }
-      tx = parsed;
-    } catch {
-      throw new UnprocessableEntityException({
-        code: "INVALID_XDR",
-        message: "Could not parse the signed transaction.",
-      });
-    }
-
-    const op = tx.operations.length === 1 ? tx.operations[0] : null;
+    const tx = this.parseTransactionFromXdr(signedXdr);
     const expectedAmount = rewardXlm.toFixed(7);
+    const op = tx.operations.length === 1 ? tx.operations[0] : null;
 
-    const valid =
-      op &&
-      ((op.type === "payment" &&
-        op.destination === participant.matched_wallet &&
-        op.asset.isNative() &&
-        Number(op.amount).toFixed(7) === expectedAmount) ||
-        (op.type === "createAccount" &&
-          op.destination === participant.matched_wallet &&
-          Number(op.startingBalance).toFixed(7) === expectedAmount));
-
-    if (!valid) {
+    if (
+      !op ||
+      !participant.matched_wallet ||
+      !matchesNativePayout(op, participant.matched_wallet, expectedAmount)
+    ) {
       throw new UnprocessableEntityException({
         code: "XDR_MISMATCH",
         message:
@@ -499,6 +763,108 @@ export class ActivationsService {
       });
     }
     return tx;
+  }
+
+  private parseAndValidateBatchXdr(
+    signedXdr: string,
+    participants: Array<{ id: string; matched_wallet: string | null }>,
+    rewardXlm: number
+  ): Transaction {
+    const tx = this.parseTransactionFromXdr(signedXdr);
+    const expectedAmount = rewardXlm.toFixed(7);
+    const expectedDestinations = new Set(
+      participants.map((p) => p.matched_wallet).filter(Boolean) as string[]
+    );
+
+    if (tx.operations.length !== expectedDestinations.size) {
+      throw new UnprocessableEntityException({
+        code: "XDR_MISMATCH",
+        message:
+          "Signed transaction does not match the expected payout destination/amount.",
+      });
+    }
+
+    const matchedDestinations = new Set<string>();
+    for (const op of tx.operations) {
+      const destination =
+        op.type === "payment" || op.type === "createAccount"
+          ? op.destination
+          : null;
+      if (
+        !destination ||
+        !expectedDestinations.has(destination) ||
+        matchedDestinations.has(destination) ||
+        !matchesNativePayout(op, destination, expectedAmount)
+      ) {
+        throw new UnprocessableEntityException({
+          code: "XDR_MISMATCH",
+          message:
+            "Signed transaction does not match the expected payout destination/amount.",
+        });
+      }
+      matchedDestinations.add(destination);
+    }
+
+    return tx;
+  }
+
+  private async sendPayoutConfirmation(params: {
+    to: string;
+    activationName: string;
+    amountXlm: number;
+    wallet: string;
+    txHash: string;
+    paidAtISO: string;
+  }): Promise<void> {
+    try {
+      await this.email.sendTemplate({
+        to: params.to,
+        templateId: ACTIVATION_PAYOUT_TEMPLATE,
+        variables: {
+          activation_name: params.activationName,
+          amount_xlm: params.amountXlm,
+          wallet: params.wallet,
+          paid_at: new Date(params.paidAtISO).toLocaleString(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+          tx_hash: params.txHash,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`payout confirmation email failed: ${String(err)}`);
+    }
+  }
+
+  private async sendInviteEmails(
+    activation: {
+      name: string;
+      reward_xlm: number | string;
+      expires_at: string;
+    },
+    emails: string[]
+  ): Promise<void> {
+    if (!emails.length) return;
+
+    const messages = emails.map((email) => ({
+      to: email,
+      templateId: ACTIVATION_INVITE_TEMPLATE,
+      variables: {
+        activation_name: activation.name,
+        reward_xlm: Number(activation.reward_xlm),
+        participant_email: email,
+        expires_at: new Date(activation.expires_at).toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }),
+      },
+    }));
+
+    try {
+      await this.email.sendTemplateBatch(messages);
+    } catch (err) {
+      this.logger.warn(`activation invite emails failed: ${String(err)}`);
+    }
   }
 
   /**

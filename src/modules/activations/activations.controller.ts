@@ -17,7 +17,9 @@ import { Throttle } from "@nestjs/throttler";
 import { ActivationsService } from "./activations.service";
 import { CancelPayoutDto } from "./dto/cancel-payout.dto";
 import { CreateActivationDto } from "./dto/create-activation.dto";
+import { PrepareBatchPayoutDto } from "./dto/prepare-batch-payout.dto";
 import { PreparePayoutDto } from "./dto/prepare-payout.dto";
+import { SubmitBatchPayoutDto } from "./dto/submit-batch-payout.dto";
 import { SubmitPayoutDto } from "./dto/submit-payout.dto";
 
 @ApiTags("activations")
@@ -65,6 +67,17 @@ export class ActivationsController {
     return this.svc.preparePayout(dto);
   }
 
+  @Post("payouts/prepare-batch")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Lock all payable participants and build one batched XLM payout XDR (max 100 ops).",
+  })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  prepareBatchPayout(@Body() dto: PrepareBatchPayoutDto) {
+    return this.svc.prepareBatchPayout(dto);
+  }
+
   @Post("payouts/submit")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -75,11 +88,32 @@ export class ActivationsController {
     return this.svc.submitPayout(dto);
   }
 
+  @Post("payouts/submit-batch")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Submit the signed batched payout and mark all included participants paid.",
+  })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  submitBatchPayout(@Body() dto: SubmitBatchPayoutDto) {
+    return this.svc.submitBatchPayout(dto);
+  }
+
   @Post("payouts/cancel")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Release a payout lock (signature rejected)." })
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   cancelPayout(@Body() dto: CancelPayoutDto) {
     return this.svc.cancelPayout(dto.participant_id);
+  }
+
+  @Post(":id/send-invites")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Resend invitation emails to still-pending participants.",
+  })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  sendInvites(@Param("id", ParseUUIDPipe) id: string) {
+    return this.svc.sendInvites(id);
   }
 }
