@@ -9,13 +9,16 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
-  Asset,
   BASE_FEE,
   Memo,
-  Operation,
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
+import {
+  buildNativePaymentOperation,
+  matchesNativePayout,
+  parseSignedTransaction,
+} from "../../shared/stellar/payment-xdr";
 import { StellarRpcService } from "../stellar/stellar-rpc.service";
 import { SupabaseService } from "../supabase/supabase.service";
 import { EmailService } from "../email/email.service";
@@ -303,16 +306,11 @@ export class ActivationsService {
         networkPassphrase: this.stellar.getNetworkPassphrase(),
       })
         .addOperation(
-          destinationExists
-            ? Operation.payment({
-                destination,
-                asset: Asset.native(),
-                amount,
-              })
-            : Operation.createAccount({
-                destination,
-                startingBalance: amount,
-              })
+          buildNativePaymentOperation({
+            destination,
+            amount,
+            createAccount: !destinationExists,
+          })
         )
         .addMemo(Memo.text(PAYOUT_MEMO))
         .setTimeout(300)
@@ -466,9 +464,7 @@ export class ActivationsService {
       const source = await horizon.loadAccount(dto.admin_wallet);
       const amount = rewardXlm.toFixed(7);
       const included: typeof locked = [];
-      const operations: ReturnType<
-        typeof Operation.payment | typeof Operation.createAccount
-      >[] = [];
+      const operations: ReturnType<typeof buildNativePaymentOperation>[] = [];
 
       for (const participant of locked) {
         const destination = participant.matched_wallet!;
@@ -487,16 +483,11 @@ export class ActivationsService {
 
         included.push(participant);
         operations.push(
-          destinationExists
-            ? Operation.payment({
-                destination,
-                asset: Asset.native(),
-                amount,
-              })
-            : Operation.createAccount({
-                destination,
-                startingBalance: amount,
-              })
+          buildNativePaymentOperation({
+            destination,
+            amount,
+            createAccount: !destinationExists,
+          })
         );
       }
 
@@ -734,37 +725,17 @@ export class ActivationsService {
   }
 
   private parseTransactionFromXdr(signedXdr: string): Transaction {
-    try {
-      const parsed = TransactionBuilder.fromXDR(
-        signedXdr,
-        this.stellar.getNetworkPassphrase()
-      );
-      if (!(parsed instanceof Transaction)) {
-        throw new Error("fee-bump transactions are not supported");
-      }
-      return parsed;
-    } catch {
+    const tx = parseSignedTransaction(
+      signedXdr,
+      this.stellar.getNetworkPassphrase()
+    );
+    if (!tx) {
       throw new UnprocessableEntityException({
         code: "INVALID_XDR",
         message: "Could not parse the signed transaction.",
       });
     }
-  }
-
-  private operationMatchesPayout(
-    op: Transaction["operations"][number],
-    destination: string,
-    expectedAmount: string
-  ): boolean {
-    return (
-      (op.type === "payment" &&
-        op.destination === destination &&
-        op.asset.isNative() &&
-        Number(op.amount).toFixed(7) === expectedAmount) ||
-      (op.type === "createAccount" &&
-        op.destination === destination &&
-        Number(op.startingBalance).toFixed(7) === expectedAmount)
-    );
+    return tx;
   }
 
   /**
@@ -783,11 +754,7 @@ export class ActivationsService {
     if (
       !op ||
       !participant.matched_wallet ||
-      !this.operationMatchesPayout(
-        op,
-        participant.matched_wallet,
-        expectedAmount
-      )
+      !matchesNativePayout(op, participant.matched_wallet, expectedAmount)
     ) {
       throw new UnprocessableEntityException({
         code: "XDR_MISMATCH",
@@ -827,7 +794,7 @@ export class ActivationsService {
         !destination ||
         !expectedDestinations.has(destination) ||
         matchedDestinations.has(destination) ||
-        !this.operationMatchesPayout(op, destination, expectedAmount)
+        !matchesNativePayout(op, destination, expectedAmount)
       ) {
         throw new UnprocessableEntityException({
           code: "XDR_MISMATCH",
