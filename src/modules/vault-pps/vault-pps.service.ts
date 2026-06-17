@@ -9,6 +9,16 @@ export interface RecordPpsResult {
   inserted: number;
 }
 
+export interface VaultPpsHistoryRow {
+  pps: string;
+  recorded_at: string;
+}
+
+export interface VaultPpsHistoryResult {
+  data: VaultPpsHistoryRow[];
+  apy7d: number | null;
+}
+
 const ONE_SHARE = 1_000_000_000_000n;
 
 @Injectable()
@@ -76,5 +86,37 @@ export class VaultPpsService {
 
     this.logger.log(`[vault-pps] inserted ${rows.length} rows`);
     return { inserted: rows.length };
+  }
+
+  async getHistory(vaultId: string): Promise<VaultPpsHistoryResult> {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await this.supabase.client
+      .from("vault_pps_history")
+      .select("pps, recorded_at")
+      .eq("vault_id", vaultId)
+      .gte("recorded_at", since)
+      .order("recorded_at", { ascending: true });
+
+    if (error) {
+      this.logger.error(`[vault-pps] history failed: ${error.message}`);
+      throw new Error(error.message);
+    }
+
+    const series = (data ?? []) as VaultPpsHistoryRow[];
+    const sevenDaysAgo = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    let apy7d: number | null = null;
+    if (series.length > 0) {
+      const ppsNow = Number(series[series.length - 1].pps);
+      const pastRow = series.find((r) => r.recorded_at >= sevenDaysAgo);
+      if (pastRow) {
+        const ppsPast = Number(pastRow.pps);
+        apy7d = ppsPast > 0 ? (ppsNow / ppsPast - 1) * (365 / 7) * 100 : null;
+      }
+    }
+
+    return { data: series, apy7d };
   }
 }
