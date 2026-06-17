@@ -8,18 +8,32 @@ import type { IncomingMessage } from "http";
 import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
+import { ActivationsModule } from "./modules/activations/activations.module";
+import { AdminAuthModule } from "./modules/admin-auth/admin-auth.module";
+import { AdminDashboardModule } from "./modules/admin-dashboard/admin-dashboard.module";
+import { AdminStrategiesModule } from "./modules/admin-strategies/admin-strategies.module";
 import { AssetPricesModule } from "./modules/asset-prices/asset-prices.module";
+import { AuditModule } from "./modules/audit/audit.module";
+import { CampaignsModule } from "./modules/campaigns/campaigns.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
+import { DefindexModule } from "./modules/defindex/defindex.module";
+import { EmailModule } from "./modules/email/email.module";
+import { InvitationsModule } from "./modules/invitations/invitations.module";
+import { RecommendedStrategiesModule } from "./modules/recommended-strategies/recommended-strategies.module";
+import { SegmentsModule } from "./modules/segments/segments.module";
 import { HealthModule } from "./modules/health/health.module";
 import { OrchestratorModule } from "./modules/orchestrator/orchestrator.module";
+import { ContractActivityModule } from "./modules/contract-activity/contract-activity.module";
 import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
 import { VaultPpsModule } from "./modules/vault-pps/vault-pps.module";
 import { SupabaseModule } from "./modules/supabase/supabase.module";
 import { StellarModule } from "./modules/stellar/stellar.module";
 import { EtherfuseModule } from "./modules/etherfuse/etherfuse.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
+import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { StrategyCatalogModule } from "./modules/strategy-catalog/strategy-catalog.module";
 import { UsersModule } from "./modules/users/users.module";
+import { VaultApyModule } from "./modules/vault-apy/vault-apy.module";
 import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
 
 @Module({
@@ -62,17 +76,31 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     ScheduleModule.forRoot(),
     StellarModule,
     SupabaseModule,
+    EmailModule,
     OrchestratorModule,
     HealthModule,
     EtherfuseModule,
     TransactionModule,
     PoolRatesModule,
+    ContractActivityModule,
     VaultPpsModule,
+    VaultApyModule,
     AssetPricesModule,
+    AuditModule,
     DashboardModule,
+    DefindexModule,
     VaultInvestModule,
     StrategyCatalogModule,
     UsersModule,
+    ActivationsModule,
+    ReferralsModule,
+    AdminAuthModule,
+    AdminDashboardModule,
+    SegmentsModule,
+    InvitationsModule,
+    AdminStrategiesModule,
+    CampaignsModule,
+    RecommendedStrategiesModule,
   ],
   providers: [
     {

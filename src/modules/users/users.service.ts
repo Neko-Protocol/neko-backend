@@ -8,6 +8,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import type { UserPreferences, UserPublic } from "@neko/api-contracts";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { ReferralsService } from "../referrals/referrals.service";
 import { SupabaseService } from "../supabase/supabase.service";
 import { EmailConfirmDto } from "./dto/email-confirm.dto";
 import { EmailStartDto } from "./dto/email-start.dto";
@@ -23,7 +24,8 @@ export class UsersService {
 
   constructor(
     private readonly supabase: SupabaseService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly referrals: ReferralsService
   ) {
     const url = this.config.get<string>("SUPABASE_URL");
     const anonKey = this.config.get<string>("SUPABASE_ANON_KEY");
@@ -80,6 +82,17 @@ export class UsersService {
             .update({ updated_at: new Date().toISOString() })
             .eq("wallet_address", wallet);
         }
+
+        return { ok: true };
+      }
+
+      // Referral attribution only on the first-ever insert, so an existing
+      // user reconnecting with someone's ref code can never be claimed.
+      if (dto.ref_code?.trim()) {
+        await this.referrals.attribute({
+          code: dto.ref_code,
+          referred_wallet: wallet,
+        });
       }
 
       return { ok: true };
@@ -203,6 +216,50 @@ export class UsersService {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Browser-navigated magic-link handler. Supabase email templates that send a
+   * `token_hash` directly point here; we verify server-side (no cookies) and the
+   * controller 302-redirects to the web-app /settings page.
+   */
+  async confirmEmailByTokenHash(
+    wallet: string | undefined,
+    tokenHash: string | undefined,
+    type: string | undefined
+  ): Promise<boolean> {
+    try {
+      if (!wallet || !tokenHash) return false;
+      if (!this.authClient) return false;
+
+      const { data, error } = await this.authClient.auth.verifyOtp({
+        type: (type as "magiclink" | "email") ?? "magiclink",
+        token_hash: tokenHash,
+      });
+      if (error || !data?.user?.email) return false;
+
+      const { error: updateError } = await this.supabase.client
+        .from("users")
+        .update({
+          email: data.user.email,
+          email_verified_at: new Date().toISOString(),
+          auth_user_id: data.user.id,
+        })
+        .eq("wallet_address", wallet);
+
+      return !updateError;
+    } catch (err) {
+      this.logger.warn(
+        `confirmEmailByTokenHash failed: ${(err as Error).message}`
+      );
+      return false;
+    }
+  }
+
+  /** Absolute URL of the web-app settings page used as the magic-link redirect. */
+  settingsRedirectUrl(status: "verified" | "error"): string {
+    const base = this.webAppBaseUrl ?? "";
+    return `${base}/settings?email=${status}`;
   }
 
   async confirmEmail(dto: EmailConfirmDto): Promise<{ ok: true }> {

@@ -1,63 +1,104 @@
-import { Test } from "@nestjs/testing";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigService } from "@nestjs/config";
+
+jest.mock("@neko/keeper", () => ({
+  getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),
+  getAssetsConfig: jest.fn().mockReturnValue({
+    CETES: { contract: "C_CETES_FAKE", name: "Cetes" },
+    USTRY: { contract: "C_USTRY_FAKE", name: "UsTry" },
+    TESOURO: { contract: "C_TESOURO_FAKE", name: "Tesouro" },
+  }),
+}));
+jest.mock("@neko/orchestrator", () => ({
+  createOrchestrator: jest.fn(),
+  setContractErrorExtractor: jest.fn(),
+}));
+
 import { StrategyCatalogService } from "./strategy-catalog.service";
+import { SupabaseService } from "../supabase/supabase.service";
+import { OrchestratorService } from "../orchestrator/orchestrator.service";
+import { DefindexService } from "../defindex/defindex.service";
+
+type AnyRecord = Record<string, unknown>;
+
+function buildSupabaseMock(opts: {
+  upsertError?: { message: string } | null;
+  deleteError?: { message: string } | null;
+}) {
+  const upsert = jest
+    .fn()
+    .mockResolvedValue({ error: opts.upsertError ?? null });
+  const lt = jest.fn().mockResolvedValue({ error: opts.deleteError ?? null });
+  const inFn = jest.fn(() => ({ lt }));
+  const del = jest.fn(() => ({ in: inFn }));
+  const from = jest.fn(() => ({ upsert, delete: del }));
+  return {
+    service: { client: { from } } as unknown as SupabaseService,
+    upsert,
+    from,
+  };
+}
+
+function buildService(
+  supabase: SupabaseService,
+  pools: AnyRecord[],
+  vaults: AnyRecord[]
+) {
+  const config = {
+    get: jest.fn().mockReturnValue("mainnet"),
+  } as unknown as ConfigService;
+  const orchestratorService = {
+    orchestrator: { getAllPools: jest.fn().mockResolvedValue(pools) },
+  } as unknown as OrchestratorService;
+  const defindex = {
+    getVaults: jest.fn().mockResolvedValue({ vaults, prices: {} }),
+  } as unknown as DefindexService;
+  return new StrategyCatalogService(
+    config,
+    supabase,
+    orchestratorService,
+    defindex
+  );
+}
 
 describe("StrategyCatalogService", () => {
-  const fetchMock = jest.fn();
-  const originalFetch = global.fetch;
+  const pool = {
+    id: "p1",
+    type: "blend",
+    name: "Pool 1",
+    apy: 5,
+    tokens: [{ code: "USDC" }],
+  };
+  const vault = {
+    contractId: "v1",
+    info: { name: "Vault 1", assets: [{ symbol: "USDC" }] },
+  };
 
-  beforeEach(() => {
-    fetchMock.mockReset();
-    global.fetch = fetchMock as unknown as typeof fetch;
-  });
+  it("builds destinations and upserts them to the catalog", async () => {
+    const { service: supabase, upsert } = buildSupabaseMock({});
+    const svc = buildService(supabase, [pool], [vault]);
 
-  afterAll(() => {
-    global.fetch = originalFetch;
-  });
+    const result = await svc.refresh();
 
-  async function buildService(env: Record<string, string>) {
-    const mod = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          ignoreEnvFile: true,
-          load: [() => env],
+    expect(result.upserted).toBeGreaterThanOrEqual(2);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const rows = upsert.mock.calls[0][0] as AnyRecord[];
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "pool", id: "p1", protocol: "Blend" }),
+        expect.objectContaining({
+          kind: "vault",
+          id: "v1",
+          accepted_token_codes: ["USDC"],
         }),
-      ],
-      providers: [StrategyCatalogService],
-    }).compile();
-    return mod.get(StrategyCatalogService);
-  }
-
-  it("returns upserted:0 and skips fetch when WEB_APP_URL is not set", async () => {
-    const svc = await buildService({});
-    const result = await svc.refresh();
-    expect(result).toEqual({ upserted: 0 });
-    expect(fetchMock).not.toHaveBeenCalled();
+      ])
+    );
   });
 
-  it("calls the web-app refresh endpoint with the bearer cron secret", async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ upserted: 7 }), { status: 200 })
-    );
-    const svc = await buildService({
-      WEB_APP_URL: "https://app.example.com/",
-      CRON_SECRET: "secret-xyz",
+  it("throws when the upsert fails", async () => {
+    const { service: supabase } = buildSupabaseMock({
+      upsertError: { message: "boom" },
     });
-    const result = await svc.refresh();
-    expect(result).toEqual({ upserted: 7 });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://app.example.com/api/strategies/catalog/refresh",
-      expect.objectContaining({
-        method: "GET",
-        headers: { Authorization: "Bearer secret-xyz" },
-      })
-    );
-  });
-
-  it("throws on a non-2xx response", async () => {
-    fetchMock.mockResolvedValueOnce(new Response("nope", { status: 503 }));
-    const svc = await buildService({ WEB_APP_URL: "https://app.example.com" });
-    await expect(svc.refresh()).rejects.toThrow(/HTTP 503/);
+    const svc = buildService(supabase, [pool], [vault]);
+    await expect(svc.refresh()).rejects.toThrow(/boom/);
   });
 });

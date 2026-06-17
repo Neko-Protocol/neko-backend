@@ -14,6 +14,12 @@ export interface RecordPricesResult {
   inserted: number;
 }
 
+export interface AssetPriceHistoryRow {
+  price: number | string | null;
+  source: string | null;
+  recorded_at: string;
+}
+
 @Injectable()
 export class AssetPricesService {
   private readonly logger = new Logger(AssetPricesService.name);
@@ -68,5 +74,22 @@ export class AssetPricesService {
 
     this.logger.log(`[asset-prices] inserted ${rows.length} rows`);
     return { inserted: rows.length };
+  }
+
+  async getHistory(symbol: string): Promise<AssetPriceHistoryRow[]> {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await this.supabase.client
+      .from("asset_price_history")
+      .select("price, source, recorded_at")
+      .eq("symbol", symbol.toUpperCase())
+      .gte("recorded_at", since)
+      .order("recorded_at", { ascending: true });
+
+    if (error) {
+      this.logger.error(`[asset-prices] history failed: ${error.message}`);
+      throw new Error(error.message);
+    }
+
+    return (data ?? []) as AssetPriceHistoryRow[];
   }
 }
