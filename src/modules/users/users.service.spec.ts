@@ -5,7 +5,6 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createClient } from "@supabase/supabase-js";
-import { ReferralsService } from "../referrals/referrals.service";
 import { SupabaseService } from "../supabase/supabase.service";
 import { UsersService } from "./users.service";
 
@@ -119,15 +118,11 @@ describe("UsersService", () => {
 
   function buildService(
     configOverrides: Record<string, string | undefined> = {},
-    db = chainableFrom({}),
-    referrals: ReferralsService = {
-      attribute: jest.fn().mockResolvedValue(undefined),
-    } as unknown as ReferralsService
+    db = chainableFrom({})
   ) {
     return new UsersService(
       makeSupabaseService(db),
-      makeConfigService(configOverrides),
-      referrals
+      makeConfigService(configOverrides)
     );
   }
 

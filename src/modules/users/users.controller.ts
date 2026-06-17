@@ -6,7 +6,6 @@ import {
   HttpStatus,
   Post,
   Query,
-  Res,
   VERSION_NEUTRAL,
 } from "@nestjs/common";
 import {
@@ -14,10 +13,8 @@ import {
   ApiTags,
   ApiTooManyRequestsResponse,
 } from "@nestjs/swagger";
-import { SkipThrottle, Throttle } from "@nestjs/throttler";
-import type { Response } from "express";
+import { Throttle } from "@nestjs/throttler";
 import type { UserPublic } from "@neko/api-contracts";
-import { SkipAuth } from "../../common/decorators/skip-auth.decorator";
 import { EmailConfirmDto } from "./dto/email-confirm.dto";
 import { EmailStartDto } from "./dto/email-start.dto";
 import { RegisterUserDto } from "./dto/register-user.dto";
@@ -77,26 +74,5 @@ export class UsersController {
   })
   confirmEmail(@Body() dto: EmailConfirmDto) {
     return this.svc.confirmEmail(dto);
-  }
-
-  // GET /users/email/confirm?wallet=...&token_hash=...&type=magiclink
-  //
-  // Browser-navigated Supabase magic-link target (token_hash flow). Hit
-  // directly by the user's browser, so it skips the internal-key guard and
-  // 302-redirects to the web-app /settings page.
-  @Get("email/confirm")
-  @SkipAuth()
-  @SkipThrottle()
-  @ApiOperation({
-    summary: "Verify a magic-link token_hash and redirect to the web-app.",
-  })
-  async confirmEmailLink(
-    @Res() res: Response,
-    @Query("wallet") wallet?: string,
-    @Query("token_hash") tokenHash?: string,
-    @Query("type") type?: string
-  ): Promise<void> {
-    const ok = await this.svc.confirmEmailByTokenHash(wallet, tokenHash, type);
-    res.redirect(this.svc.settingsRedirectUrl(ok ? "verified" : "error"));
   }
 }
