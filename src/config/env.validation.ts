@@ -43,4 +43,7 @@ export const envValidationSchema = Joi.object({
     .optional()
     .allow(""),
   CRON_SECRET: Joi.string().optional().allow(""),
+
+  RESEND_API_KEY: Joi.string().optional().allow(""),
+  RESEND_FROM_EMAIL: Joi.string().default("neko@nekoprotocol.xyz"),
 });

@@ -1,4 +1,14 @@
 import { Test } from "@nestjs/testing";
+
+jest.mock("@neko/keeper", () => ({
+  getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),
+  getAssetsConfig: jest.fn().mockReturnValue({}),
+}));
+jest.mock("@neko/orchestrator", () => ({
+  createOrchestrator: jest.fn(),
+  setContractErrorExtractor: jest.fn(),
+}));
+
 import { StrategyCatalogController } from "./strategy-catalog.controller";
 import { StrategyCatalogService } from "./strategy-catalog.service";
 
