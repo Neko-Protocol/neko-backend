@@ -11,7 +11,7 @@ import {
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
-import { StellarRpcService } from "../../stellar/stellar-rpc.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import {
   getContractLabel,
   isAllowedContract,
@@ -100,7 +100,9 @@ export class XdrValidator {
     }
 
     const invoke = func.invokeContract();
-    const contractId = Address.fromScAddress(invoke.contractAddress()).toString();
+    const contractId = Address.fromScAddress(
+      invoke.contractAddress()
+    ).toString();
 
     if (!isAllowedContract(contractId)) {
       this.logger.warn({

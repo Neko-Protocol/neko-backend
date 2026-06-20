@@ -1,4 +1,4 @@
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { SegmentsService } from "./segments.service";
 
 type Row = Record<string, unknown>;

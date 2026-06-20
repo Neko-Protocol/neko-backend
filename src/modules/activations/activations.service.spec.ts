@@ -1,8 +1,8 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { EmailService } from "../email/email.service";
-import { StellarRpcService } from "../stellar/stellar-rpc.service";
-import { SupabaseService } from "../supabase/supabase.service";
+import { EmailService } from "@core/email/email.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { ActivationsService } from "./activations.service";
 
 const ACTIVATION_ID = "11111111-1111-4111-8111-111111111111";

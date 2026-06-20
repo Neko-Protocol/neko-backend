@@ -9,7 +9,7 @@ import { ConfigService } from "@nestjs/config";
 import type { UserPreferences, UserPublic } from "@neko/api-contracts";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ReferralsService } from "../referrals/referrals.service";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { EmailConfirmDto } from "./dto/email-confirm.dto";
 import { EmailStartDto } from "./dto/email-start.dto";
 import { RegisterUserDto } from "./dto/register-user.dto";

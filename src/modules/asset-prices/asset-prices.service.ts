@@ -7,7 +7,7 @@ import {
   type NetworkId,
   type StellarPriceService,
 } from "@neko/keeper";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { STELLAR_PRICE_SERVICE } from "./asset-prices.tokens";
 
 export interface RecordPricesResult {

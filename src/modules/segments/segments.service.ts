@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { Recipient, SegmentId } from "./segments.types";
 
 type Row = Record<string, unknown>;

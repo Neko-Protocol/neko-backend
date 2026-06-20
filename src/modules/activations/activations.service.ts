@@ -19,9 +19,9 @@ import {
   matchesNativePayout,
   parseSignedTransaction,
 } from "../../shared/stellar/payment-xdr";
-import { StellarRpcService } from "../stellar/stellar-rpc.service";
-import { SupabaseService } from "../supabase/supabase.service";
-import { EmailService } from "../email/email.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
+import { EmailService } from "@core/email/email.service";
 import { CreateActivationDto } from "./dto/create-activation.dto";
 import { PrepareBatchPayoutDto } from "./dto/prepare-batch-payout.dto";
 import { PreparePayoutDto } from "./dto/prepare-payout.dto";

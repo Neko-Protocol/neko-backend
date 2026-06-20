@@ -2,8 +2,8 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { getAssetsConfig, getCurrentNetworkId } from "@neko/keeper";
 import type { PoolInfo, PoolType } from "@neko/orchestrator";
-import { SupabaseService } from "../supabase/supabase.service";
-import { OrchestratorService } from "../orchestrator/orchestrator.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
+import { OrchestratorService } from "@core/orchestrator/orchestrator.service";
 import { DefindexService } from "../defindex/defindex.service";
 
 export interface RefreshCatalogResult {

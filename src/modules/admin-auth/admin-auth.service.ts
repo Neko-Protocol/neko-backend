@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import bcrypt from "bcryptjs";
 import { Secret, TOTP } from "otpauth";
 import QRCode from "qrcode";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 
 interface AdminUser {
   id: string;

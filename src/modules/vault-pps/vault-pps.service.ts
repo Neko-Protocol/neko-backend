@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Client as DefindexVaultClient } from "@neko/defindex-vault";
 import { parseAllVaultIds } from "@neko/keeper";
 import { fetchManagedFunds } from "../vault-invest/keeper/tx";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 
 export interface RecordPpsResult {
   inserted: number;

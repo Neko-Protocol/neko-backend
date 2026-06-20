@@ -8,8 +8,8 @@ import {
 } from "@neko/orchestrator";
 import { parseAllVaultIds, type StellarPriceService } from "@neko/keeper";
 import { Client as DefindexVaultClient } from "@neko/defindex-vault";
-import { OrchestratorService } from "../orchestrator/orchestrator.service";
-import { StellarRpcService } from "../stellar/stellar-rpc.service";
+import { OrchestratorService } from "@core/orchestrator/orchestrator.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { STELLAR_PRICE_SERVICE } from "../asset-prices/asset-prices.tokens";
 import { DashboardCache } from "./cache/dashboard-cache";
 import { batchCheckLpBalances } from "./lp-screen";

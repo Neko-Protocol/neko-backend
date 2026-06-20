@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { EmailService } from "../email/email.service";
-import { SupabaseService } from "../supabase/supabase.service";
+import { EmailService } from "@core/email/email.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { CreateInvitationDto } from "./dto/create-invitation.dto";
 import {
   INVITATION_TYPES,

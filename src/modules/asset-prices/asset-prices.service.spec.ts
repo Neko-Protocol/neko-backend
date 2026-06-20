@@ -12,7 +12,7 @@ jest.mock("@neko/keeper", () => ({
 }));
 
 import { AssetPricesService } from "./asset-prices.service";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { STELLAR_PRICE_SERVICE } from "./asset-prices.tokens";
 
 describe("AssetPricesService", () => {

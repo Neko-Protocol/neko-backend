@@ -19,7 +19,7 @@ import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
 import { PreparedTxCache } from "./cache/prepared-tx-cache";
 import { TransactionService } from "./transaction.service";
 import { XdrValidator } from "./validation/xdr-validator";
-import { StellarRpcService } from "../stellar/stellar-rpc.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 
 const PASSPHRASE = Networks.PUBLIC;
 const ALLOWED_BLEND_POOL =

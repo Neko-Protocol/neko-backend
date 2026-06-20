@@ -14,8 +14,8 @@ jest.mock("@neko/orchestrator", () => ({
 }));
 
 import { StrategyCatalogService } from "./strategy-catalog.service";
-import { SupabaseService } from "../supabase/supabase.service";
-import { OrchestratorService } from "../orchestrator/orchestrator.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
+import { OrchestratorService } from "@core/orchestrator/orchestrator.service";
 import { DefindexService } from "../defindex/defindex.service";
 
 type AnyRecord = Record<string, unknown>;

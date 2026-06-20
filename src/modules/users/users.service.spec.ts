@@ -6,7 +6,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { createClient } from "@supabase/supabase-js";
 import { ReferralsService } from "../referrals/referrals.service";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { UsersService } from "./users.service";
 
 jest.mock("@supabase/supabase-js");

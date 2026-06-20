@@ -27,7 +27,7 @@ import {
   type StellarNetworkId,
 } from "@neko/orchestrator";
 import type { Network } from "@blend-capital/blend-sdk";
-import { StellarRpcService } from "../stellar/stellar-rpc.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 
 function mapNetworkId(raw: string): StellarNetworkId {
   const n = raw.trim().toUpperCase();

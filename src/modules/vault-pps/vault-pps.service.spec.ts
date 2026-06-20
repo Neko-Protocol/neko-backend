@@ -15,7 +15,7 @@ jest.mock("../vault-invest/keeper/tx", () => ({
 import { ConfigService } from "@nestjs/config";
 import { fetchManagedFunds } from "../vault-invest/keeper/tx";
 import { VaultPpsService } from "./vault-pps.service";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 
 const { Client: ClientMock } = jest.requireMock("@neko/defindex-vault") as {
   Client: jest.Mock;

@@ -14,7 +14,7 @@ import {
   StrKey,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
-import { StellarRpcService } from "../../stellar/stellar-rpc.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { XdrValidator } from "./xdr-validator";
 
 const PASSPHRASE = Networks.PUBLIC;

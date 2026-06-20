@@ -1,5 +1,5 @@
 import { NotFoundException } from "@nestjs/common";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { ReferralsService } from "./referrals.service";
 
 const WALLET = "GREFERRER";

@@ -3,8 +3,8 @@ import {
   InternalServerErrorException,
   Logger,
 } from "@nestjs/common";
-import { StellarRpcService } from "../stellar/stellar-rpc.service";
-import { SupabaseService } from "../supabase/supabase.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { BlendPoolAdapter } from "./adapters/blend-pool.adapter";
 import type { PoolRateRow } from "./adapters/blend-pool.adapter";
 import { AquaPoolAdapter } from "./adapters/aqua-pool.adapter";

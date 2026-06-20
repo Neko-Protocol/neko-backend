@@ -3,10 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { EmailService } from "../email/email.service";
+import { EmailService } from "@core/email/email.service";
 import { SegmentsService } from "../segments/segments.service";
 import { isSegmentId } from "../segments/segments.types";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { CreateCampaignDto } from "./dto/create-campaign.dto";
 import { UpdateCampaignDto } from "./dto/update-campaign.dto";
 import { Campaign, CampaignStatus } from "./campaigns.types";

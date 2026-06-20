@@ -6,7 +6,7 @@ import {
   getCurrentNetworkId,
   type NetworkId,
 } from "@neko/keeper";
-import { SupabaseService } from "../supabase/supabase.service";
+import { SupabaseService } from "@core/supabase/supabase.service";
 import { CreateAuditDto } from "./dto/create-audit.dto";
 
 export interface LogAuditResult {
