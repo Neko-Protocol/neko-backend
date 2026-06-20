@@ -14,6 +14,14 @@ export interface LogAuditResult {
   isFirstVaultDeposit?: boolean;
 }
 
+export type AuditRow = Record<string, unknown>;
+
+export interface AuditQueryFilter {
+  whereIn?: { column: string; values: (string | number)[] };
+  gte?: { column: string; value: string };
+  notNull?: string;
+}
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
@@ -168,5 +176,58 @@ export class AuditService {
     } catch {
       return [];
     }
+  }
+
+  async countMainnet(): Promise<number> {
+    const { count } = await this.supabase.client
+      .from("audit_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("network", "mainnet");
+    return count ?? 0;
+  }
+
+  async query(
+    columns: string,
+    filter: AuditQueryFilter = {}
+  ): Promise<AuditRow[]> {
+    const pageSize = 1000;
+    let offset = 0;
+    const out: AuditRow[] = [];
+    for (;;) {
+      let q = this.supabase.client
+        .from("audit_logs")
+        .select(columns)
+        .eq("network", "mainnet")
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (filter.whereIn) {
+        q = q.in(filter.whereIn.column, filter.whereIn.values);
+      }
+      if (filter.gte) {
+        q = q.gte(filter.gte.column, filter.gte.value);
+      }
+      if (filter.notNull) {
+        q = q.not(filter.notNull, "is", null);
+      }
+      const { data, error } = await q;
+      if (error) break;
+      const rows = (data ?? []) as unknown as AuditRow[];
+      if (!rows.length) break;
+      out.push(...rows);
+      if (rows.length < pageSize) break;
+      offset += pageSize;
+    }
+    return out;
+  }
+
+  async recent(columns: string, limit: number): Promise<AuditRow[]> {
+    const { data, error } = await this.supabase.client
+      .from("audit_logs")
+      .select(columns)
+      .eq("network", "mainnet")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as AuditRow[];
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { AuditService } from "@domains/platform/audit/audit.service";
 import { Recipient, SegmentId } from "./segments.types";
 
 type Row = Record<string, unknown>;
@@ -13,32 +14,21 @@ const DEPOSIT_ACTIONS = new Set([
 
 @Injectable()
 export class SegmentsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly audit: AuditService
+  ) {}
 
-  private async paginateAuditLogsMinimal(
-    client: SupabaseClient
-  ): Promise<{ wallet_address: string; action_type: string }[]> {
-    const pageSize = 1000;
-    let offset = 0;
+  private async paginateAuditLogsMinimal(): Promise<
+    { wallet_address: string; action_type: string }[]
+  > {
+    const rows = await this.audit.query("wallet_address,action_type");
     const out: { wallet_address: string; action_type: string }[] = [];
-    for (;;) {
-      const { data, error } = await client
-        .from("audit_logs")
-        .select("wallet_address,action_type")
-        .eq("network", "mainnet")
-        .order("id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
-      if (error || !data?.length) break;
-      const rows = data as Row[];
-      for (const r of rows) {
-        const w =
-          typeof r.wallet_address === "string" ? r.wallet_address.trim() : "";
-        const at =
-          typeof r.action_type === "string" ? r.action_type.trim() : "";
-        if (w) out.push({ wallet_address: w, action_type: at });
-      }
-      if (rows.length < pageSize) break;
-      offset += pageSize;
+    for (const r of rows) {
+      const w =
+        typeof r.wallet_address === "string" ? r.wallet_address.trim() : "";
+      const at = typeof r.action_type === "string" ? r.action_type.trim() : "";
+      if (w) out.push({ wallet_address: w, action_type: at });
     }
     return out;
   }
@@ -111,7 +101,7 @@ export class SegmentsService {
 
     const [verifiedUsers, audits] = await Promise.all([
       this.paginateVerifiedUsers(client),
-      this.paginateAuditLogsMinimal(client),
+      this.paginateAuditLogsMinimal(),
     ]);
 
     const depositorsSet = new Set<string>();

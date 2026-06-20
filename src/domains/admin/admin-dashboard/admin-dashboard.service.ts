@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { AuditService } from "@domains/platform/audit/audit.service";
 import { AuditLog, OverviewStats } from "./admin-dashboard.types";
 
 type Row = Record<string, unknown>;
@@ -31,7 +32,10 @@ function dateKeyFromIso(iso: string): string {
 
 @Injectable()
 export class AdminDashboardService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly audit: AuditService
+  ) {}
 
   private async fetchAllInPages(
     client: SupabaseClient,
@@ -39,12 +43,7 @@ export class AdminDashboardService {
     columns: string,
     filter?: { column: string; gte: string } | { notNullColumn: string }
   ): Promise<Row[]> {
-    const orderColumn =
-      table === "audit_logs"
-        ? "id"
-        : table === "users"
-          ? "wallet_address"
-          : undefined;
+    const orderColumn = table === "users" ? "wallet_address" : undefined;
 
     const pageSize = 1000;
     let offset = 0;
@@ -55,7 +54,6 @@ export class AdminDashboardService {
         .select(columns)
         .range(offset, offset + pageSize - 1);
       if (orderColumn) q = q.order(orderColumn, { ascending: true });
-      if (table === "audit_logs") q = q.eq("network", "mainnet");
       if (filter) {
         if ("notNullColumn" in filter) {
           q = q.not(filter.notNullColumn, "is", null);
@@ -85,16 +83,10 @@ export class AdminDashboardService {
           .from("users")
           .select("*", { count: "exact", head: true })
           .gte("created_at", weekAgo),
-        client
-          .from("audit_logs")
-          .select("*", { count: "exact", head: true })
-          .eq("network", "mainnet"),
-        this.fetchAllInPages(client, "audit_logs", "amount_in", {
-          notNullColumn: "amount_in",
-        }),
-        this.fetchAllInPages(client, "audit_logs", "wallet_address", {
-          column: "created_at",
-          gte: weekAgo,
+        this.audit.countMainnet(),
+        this.audit.query("amount_in", { notNull: "amount_in" }),
+        this.audit.query("wallet_address", {
+          gte: { column: "created_at", value: weekAgo },
         }),
       ]);
 
@@ -112,7 +104,7 @@ export class AdminDashboardService {
     return {
       totalUsers: usersCount.count ?? 0,
       newUsersThisWeek: newUsersCount.count ?? 0,
-      totalTransactions: txCount.count ?? 0,
+      totalTransactions: txCount,
       totalVolumeUsd,
       activeWalletsThisWeek: walletSet.size,
     };
@@ -205,11 +197,7 @@ export class AdminDashboardService {
   async getTransactionsByType(): Promise<
     { action_type: string; count: number }[]
   > {
-    const rows = await this.fetchAllInPages(
-      this.supabase.client,
-      "audit_logs",
-      "action_type"
-    );
+    const rows = await this.audit.query("action_type");
     const counts = new Map<string, number>();
     for (const r of rows) {
       const t = typeof r.action_type === "string" ? r.action_type : "unknown";
@@ -223,18 +211,11 @@ export class AdminDashboardService {
   async getDailyTransactions(
     days = 30
   ): Promise<{ date: string; count: number }[]> {
-    const client = this.supabase.client;
     const keys = dateKeysLastNDays(days);
     const start = isoStartOfDayUtc(days);
-    const rows = await this.fetchAllInPages(
-      client,
-      "audit_logs",
-      "created_at",
-      {
-        column: "created_at",
-        gte: start,
-      }
-    );
+    const rows = await this.audit.query("created_at", {
+      gte: { column: "created_at", value: start },
+    });
 
     const counts = new Map<string, number>();
     for (const r of rows) {
@@ -267,30 +248,24 @@ export class AdminDashboardService {
   }
 
   async getRecentActivity(limit = 50): Promise<AuditLog[]> {
-    const { data, error } = await this.supabase.client
-      .from("audit_logs")
-      .select(
-        [
-          "id",
-          "wallet_address",
-          "action_type",
-          "asset_in",
-          "asset_out",
-          "amount_in",
-          "token_amount_in",
-          "amount_out",
-          "pool_id",
-          "network",
-          "tx_hash",
-          "created_at",
-        ].join(",")
-      )
-      .eq("network", "mainnet")
-      .order("created_at", { ascending: false })
-      .limit(limit);
-
-    if (error || !data) return [];
-    return data as unknown as AuditLog[];
+    const rows = await this.audit.recent(
+      [
+        "id",
+        "wallet_address",
+        "action_type",
+        "asset_in",
+        "asset_out",
+        "amount_in",
+        "token_amount_in",
+        "amount_out",
+        "pool_id",
+        "network",
+        "tx_hash",
+        "created_at",
+      ].join(","),
+      limit
+    );
+    return rows as unknown as AuditLog[];
   }
 
   async getEmailVerificationStats(): Promise<{
