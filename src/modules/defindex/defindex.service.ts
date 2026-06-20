@@ -8,7 +8,7 @@ import {
   parseDefindexVaultIds,
   type StellarPriceService,
 } from "@neko/keeper";
-import { STELLAR_PRICE_SERVICE } from "../asset-prices/asset-prices.tokens";
+import { STELLAR_PRICE_SERVICE } from "@domains/market-data/asset-prices/asset-prices.tokens";
 
 /** Raw DeFindex `getVaultInfo` payload — passed through to the client untouched. */
 export type DefindexVaultInfo = Record<string, unknown>;

@@ -10,11 +10,11 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
 import { CoreModule } from "./core/core.module";
 import { ChainModule } from "./domains/chain/chain.module";
+import { MarketDataModule } from "./domains/market-data/market-data.module";
 import { ActivationsModule } from "./modules/activations/activations.module";
 import { AdminAuthModule } from "./modules/admin-auth/admin-auth.module";
 import { AdminDashboardModule } from "./modules/admin-dashboard/admin-dashboard.module";
 import { AdminStrategiesModule } from "./modules/admin-strategies/admin-strategies.module";
-import { AssetPricesModule } from "./modules/asset-prices/asset-prices.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { CampaignsModule } from "./modules/campaigns/campaigns.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
@@ -22,10 +22,7 @@ import { DefindexModule } from "./modules/defindex/defindex.module";
 import { InvitationsModule } from "./modules/invitations/invitations.module";
 import { RecommendedStrategiesModule } from "./modules/recommended-strategies/recommended-strategies.module";
 import { SegmentsModule } from "./modules/segments/segments.module";
-import { ContractActivityModule } from "./modules/contract-activity/contract-activity.module";
-import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
 import { VaultPpsModule } from "./modules/vault-pps/vault-pps.module";
-import { EtherfuseModule } from "./modules/etherfuse/etherfuse.module";
 import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { StrategyCatalogModule } from "./modules/strategy-catalog/strategy-catalog.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -72,12 +69,9 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     ScheduleModule.forRoot(),
     CoreModule,
     ChainModule,
-    EtherfuseModule,
-    PoolRatesModule,
-    ContractActivityModule,
+    MarketDataModule,
     VaultPpsModule,
     VaultApyModule,
-    AssetPricesModule,
     AuditModule,
     DashboardModule,
     DefindexModule,

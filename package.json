@@ -83,6 +83,7 @@
     },
     "moduleNameMapper": {
       "^@core/(.*)$": "<rootDir>/core/$1",
+      "^@domains/(.*)$": "<rootDir>/domains/$1",
       "^@common/(.*)$": "<rootDir>/common/$1",
       "^@shared/(.*)$": "<rootDir>/shared/$1",
       "^@config/(.*)$": "<rootDir>/config/$1"
