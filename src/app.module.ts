@@ -13,12 +13,7 @@ import { ChainModule } from "./domains/chain/chain.module";
 import { MarketDataModule } from "./domains/market-data/market-data.module";
 import { InvestingModule } from "./domains/investing/investing.module";
 import { PlatformModule } from "./domains/platform/platform.module";
-import { AdminAuthModule } from "./modules/admin-auth/admin-auth.module";
-import { AdminDashboardModule } from "./modules/admin-dashboard/admin-dashboard.module";
-import { AdminStrategiesModule } from "./modules/admin-strategies/admin-strategies.module";
-import { CampaignsModule } from "./modules/campaigns/campaigns.module";
-import { InvitationsModule } from "./modules/invitations/invitations.module";
-import { SegmentsModule } from "./modules/segments/segments.module";
+import { AdminModule } from "./domains/admin/admin.module";
 
 @Module({
   imports: [
@@ -63,12 +58,7 @@ import { SegmentsModule } from "./modules/segments/segments.module";
     MarketDataModule,
     InvestingModule,
     PlatformModule,
-    AdminAuthModule,
-    AdminDashboardModule,
-    SegmentsModule,
-    InvitationsModule,
-    AdminStrategiesModule,
-    CampaignsModule,
+    AdminModule,
   ],
   providers: [
     {
