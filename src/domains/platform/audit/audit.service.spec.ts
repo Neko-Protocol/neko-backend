@@ -15,6 +15,7 @@ function makeService(result: Result, calls: Call[] = []): AuditService {
   const builder: Record<string, unknown> = {};
   for (const m of [
     "select",
+    "insert",
     "eq",
     "order",
     "range",
@@ -107,5 +108,33 @@ describe("AuditService read methods", () => {
   it("recent returns [] on error", async () => {
     const svc = makeService({ data: null, error: { message: "boom" } });
     expect(await svc.recent("id", 5)).toEqual([]);
+  });
+
+  it("record inserts into audit_logs and reports ok", async () => {
+    const calls: Call[] = [];
+    const svc = makeService({ error: null }, calls);
+    const res = await svc.record({
+      wallet_address: "GABC",
+      action_type: "activation_payout",
+      asset_in: "XLM",
+      token_amount_in: 10,
+      amount_in: 2.5,
+      tx_hash: "deadbeef",
+    });
+    expect(res).toEqual({ ok: true });
+    const insert = calls.find((c) => c.method === "insert");
+    expect(insert).toBeDefined();
+    const row = insert!.args[0] as Record<string, unknown>;
+    expect(row.wallet_address).toBe("GABC");
+    expect(row.action_type).toBe("activation_payout");
+    expect(row.network).toBe("mainnet");
+    expect(row.asset_out).toBeNull();
+  });
+
+  it("record reports the error message on failure", async () => {
+    const svc = makeService({ error: { message: "nope" } });
+    expect(await svc.record({ wallet_address: "G", action_type: "x" })).toEqual(
+      { ok: false, error: "nope" }
+    );
   });
 });
