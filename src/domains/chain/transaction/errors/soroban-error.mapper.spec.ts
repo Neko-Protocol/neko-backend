@@ -1,5 +1,5 @@
 import { HttpStatus } from "@nestjs/common";
-import { SorobanContractException } from "../../../shared/stellar/errors/soroban-contract.exception";
+import { SorobanContractException } from "@shared/stellar/errors/soroban-contract.exception";
 import { SorobanErrorMapper } from "./soroban-error.mapper";
 
 const TRACE_ID = "trace-abc-123";

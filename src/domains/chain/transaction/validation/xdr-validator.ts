@@ -16,7 +16,7 @@ import {
   getContractLabel,
   isAllowedContract,
   isAllowedFunction,
-} from "../../../shared/stellar/allowlist/contract-allowlist";
+} from "@shared/stellar/allowlist/contract-allowlist";
 
 export type ValidatedOp =
   | { kind: "invoke"; contractId: string; label: string; fnName: string }

@@ -18,7 +18,7 @@ import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
 import {
   decodeTransactionResultXdr,
   formatDecodedResult,
-} from "../../shared/stellar/errors/transaction-result.decoder";
+} from "@shared/stellar/errors/transaction-result.decoder";
 import { PrepareTransactionDto } from "./dto/prepare-transaction.dto";
 import { SubmitTransactionDto } from "./dto/submit-transaction.dto";
 import { TransactionPreparedDto } from "./dto/transaction-prepared.dto";

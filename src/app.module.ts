@@ -9,6 +9,7 @@ import { InternalApiKeyGuard } from "./common/guards/internal-api-key.guard";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { envValidationSchema } from "./config/env.validation";
 import { CoreModule } from "./core/core.module";
+import { ChainModule } from "./domains/chain/chain.module";
 import { ActivationsModule } from "./modules/activations/activations.module";
 import { AdminAuthModule } from "./modules/admin-auth/admin-auth.module";
 import { AdminDashboardModule } from "./modules/admin-dashboard/admin-dashboard.module";
@@ -25,7 +26,6 @@ import { ContractActivityModule } from "./modules/contract-activity/contract-act
 import { PoolRatesModule } from "./modules/pool-rates/pool-rates.module";
 import { VaultPpsModule } from "./modules/vault-pps/vault-pps.module";
 import { EtherfuseModule } from "./modules/etherfuse/etherfuse.module";
-import { TransactionModule } from "./modules/transaction/transaction.module";
 import { ReferralsModule } from "./modules/referrals/referrals.module";
 import { StrategyCatalogModule } from "./modules/strategy-catalog/strategy-catalog.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -71,8 +71,8 @@ import { VaultInvestModule } from "./modules/vault-invest/vault-invest.module";
     ]),
     ScheduleModule.forRoot(),
     CoreModule,
+    ChainModule,
     EtherfuseModule,
-    TransactionModule,
     PoolRatesModule,
     ContractActivityModule,
     VaultPpsModule,
