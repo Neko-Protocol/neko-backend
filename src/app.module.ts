@@ -12,17 +12,13 @@ import { CoreModule } from "./core/core.module";
 import { ChainModule } from "./domains/chain/chain.module";
 import { MarketDataModule } from "./domains/market-data/market-data.module";
 import { InvestingModule } from "./domains/investing/investing.module";
-import { ActivationsModule } from "./modules/activations/activations.module";
+import { PlatformModule } from "./domains/platform/platform.module";
 import { AdminAuthModule } from "./modules/admin-auth/admin-auth.module";
 import { AdminDashboardModule } from "./modules/admin-dashboard/admin-dashboard.module";
 import { AdminStrategiesModule } from "./modules/admin-strategies/admin-strategies.module";
-import { AuditModule } from "./modules/audit/audit.module";
 import { CampaignsModule } from "./modules/campaigns/campaigns.module";
-import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { InvitationsModule } from "./modules/invitations/invitations.module";
 import { SegmentsModule } from "./modules/segments/segments.module";
-import { ReferralsModule } from "./modules/referrals/referrals.module";
-import { UsersModule } from "./modules/users/users.module";
 
 @Module({
   imports: [
@@ -66,11 +62,7 @@ import { UsersModule } from "./modules/users/users.module";
     ChainModule,
     MarketDataModule,
     InvestingModule,
-    AuditModule,
-    DashboardModule,
-    UsersModule,
-    ActivationsModule,
-    ReferralsModule,
+    PlatformModule,
     AdminAuthModule,
     AdminDashboardModule,
     SegmentsModule,

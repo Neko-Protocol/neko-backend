@@ -18,7 +18,7 @@ import {
   buildNativePaymentOperation,
   matchesNativePayout,
   parseSignedTransaction,
-} from "../../shared/stellar/payment-xdr";
+} from "@shared/stellar/payment-xdr";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { EmailService } from "@core/email/email.service";
