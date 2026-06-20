@@ -22,6 +22,23 @@ export interface AuditQueryFilter {
   notNull?: string;
 }
 
+export interface AuditRecordInput {
+  wallet_address: string | null;
+  action_type: string;
+  asset_in?: string | null;
+  asset_out?: string | null;
+  amount_in?: number | null;
+  token_amount_in?: number | null;
+  amount_out?: number | null;
+  pool_id?: string | null;
+  tx_hash?: string | null;
+}
+
+export interface RecordAuditResult {
+  ok: boolean;
+  error?: string;
+}
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
@@ -229,5 +246,22 @@ export class AuditService {
       .limit(limit);
     if (error || !data) return [];
     return data as unknown as AuditRow[];
+  }
+
+  async record(entry: AuditRecordInput): Promise<RecordAuditResult> {
+    const { error } = await this.supabase.client.from("audit_logs").insert({
+      wallet_address: entry.wallet_address,
+      action_type: entry.action_type,
+      asset_in: entry.asset_in ?? null,
+      asset_out: entry.asset_out ?? null,
+      amount_in: entry.amount_in ?? null,
+      token_amount_in: entry.token_amount_in ?? null,
+      amount_out: entry.amount_out ?? null,
+      pool_id: entry.pool_id ?? null,
+      network: this.dbNetwork,
+      tx_hash: entry.tx_hash ?? null,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
   }
 }

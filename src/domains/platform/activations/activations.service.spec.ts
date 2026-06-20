@@ -1,8 +1,12 @@
+jest.mock("@domains/platform/audit/audit.service", () => ({
+  AuditService: class {},
+}));
+
 import { ConflictException, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { EmailService } from "@core/email/email.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { AuditService } from "@domains/platform/audit/audit.service";
 import { ActivationsService } from "./activations.service";
 
 const ACTIVATION_ID = "11111111-1111-4111-8111-111111111111";
@@ -63,12 +67,10 @@ function makeDb(results: Record<string, DbResult[]>) {
   return { supabase, from, rpc, calls };
 }
 
-function makeConfig(): ConfigService {
+function makeAudit(): AuditService {
   return {
-    get: jest.fn((key: string) =>
-      key === "STELLAR_NETWORK" ? "TESTNET" : undefined
-    ),
-  } as unknown as ConfigService;
+    record: jest.fn(() => Promise.resolve({ ok: true })),
+  } as unknown as AuditService;
 }
 
 function makeStellar(): StellarRpcService {
@@ -92,8 +94,8 @@ function buildService(db: ReturnType<typeof makeDb>) {
   return new ActivationsService(
     db.supabase,
     makeStellar(),
-    makeConfig(),
-    makeEmail()
+    makeEmail(),
+    makeAudit()
   );
 }
 

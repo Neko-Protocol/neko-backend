@@ -7,7 +7,6 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import {
   BASE_FEE,
   Memo,
@@ -22,6 +21,7 @@ import {
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { EmailService } from "@core/email/email.service";
+import { AuditService } from "@domains/platform/audit/audit.service";
 import { CreateActivationDto } from "./dto/create-activation.dto";
 import { PrepareBatchPayoutDto } from "./dto/prepare-batch-payout.dto";
 import { PreparePayoutDto } from "./dto/prepare-payout.dto";
@@ -64,16 +64,9 @@ export class ActivationsService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly stellar: StellarRpcService,
-    private readonly config: ConfigService,
-    private readonly email: EmailService
+    private readonly email: EmailService,
+    private readonly audit: AuditService
   ) {}
-
-  private dbNetwork(): string {
-    const envNet =
-      this.config.get<string>("STELLAR_NETWORK")?.trim().toUpperCase() ?? "";
-    if (envNet === "MAINNET" || envNet === "PUBLIC") return "mainnet";
-    return "testnet";
-  }
 
   private async reconcile(activationId?: string): Promise<void> {
     const { error } = await this.supabase.client.rpc("activation_reconcile", {
@@ -889,17 +882,16 @@ export class ActivationsService {
         amountInUsd = rewardXlm * priceRow.price;
       }
 
-      const { error } = await this.supabase.client.from("audit_logs").insert({
+      const result = await this.audit.record({
         wallet_address: participant.matched_wallet,
         action_type: "activation_payout",
         asset_in: "XLM",
         token_amount_in: rewardXlm,
         amount_in: amountInUsd,
-        network: this.dbNetwork(),
         tx_hash: txHash,
       });
-      if (error) {
-        this.logger.error(`payout audit insert failed: ${error.message}`);
+      if (!result.ok) {
+        this.logger.error(`payout audit insert failed: ${result.error}`);
       }
     } catch (err) {
       this.logger.error(`payout audit insert failed: ${String(err)}`);
