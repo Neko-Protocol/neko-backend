@@ -1,12 +1,17 @@
+jest.mock("@domains/platform/audit/audit.service", () => ({
+  AuditService: class {},
+}));
+
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { AuditService } from "@domains/platform/audit/audit.service";
 import { SegmentsService } from "./segments.service";
 
 type Row = Record<string, unknown>;
 
-function makeSupabase(users: Row[], audits: Row[]): SupabaseService {
-  const served = { users: false, audit_logs: false };
+function makeSupabase(users: Row[]): SupabaseService {
+  let served = false;
   const client = {
-    from(table: string) {
+    from() {
       const builder: Record<string, unknown> = {};
       const passthrough = () => builder;
       builder.select = passthrough;
@@ -14,19 +19,20 @@ function makeSupabase(users: Row[], audits: Row[]): SupabaseService {
       builder.not = passthrough;
       builder.order = passthrough;
       builder.range = () => {
-        if (table === "users") {
-          const data = served.users ? [] : users;
-          served.users = true;
-          return Promise.resolve({ data, error: null });
-        }
-        const data = served.audit_logs ? [] : audits;
-        served.audit_logs = true;
+        const data = served ? [] : users;
+        served = true;
         return Promise.resolve({ data, error: null });
       };
       return builder;
     },
   };
   return { client } as unknown as SupabaseService;
+}
+
+function makeAudit(audits: Row[]): AuditService {
+  return {
+    query: () => Promise.resolve(audits),
+  } as unknown as AuditService;
 }
 
 const USERS: Row[] = [
@@ -41,7 +47,7 @@ const AUDITS: Row[] = [
 ];
 
 describe("SegmentsService", () => {
-  const svc = () => new SegmentsService(makeSupabase(USERS, AUDITS));
+  const svc = () => new SegmentsService(makeSupabase(USERS), makeAudit(AUDITS));
 
   it("returns all verified users for 'all'", async () => {
     expect(await svc().getSegmentCount("all")).toBe(3);

@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { SupabaseClient } from "@supabase/supabase-js";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { AuditService } from "@domains/platform/audit/audit.service";
 import { CreateStrategyDto } from "./dto/create-strategy.dto";
 import { UpdateStrategyDto } from "./dto/update-strategy.dto";
 import {
@@ -17,7 +17,10 @@ const STATUS_FALLBACK: StrategyStatus = "active";
 
 @Injectable()
 export class AdminStrategiesService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly audit: AuditService
+  ) {}
 
   private mapRow(row: Record<string, unknown>): Strategy | null {
     const id = typeof row.id === "string" ? row.id : null;
@@ -281,32 +284,18 @@ export class AdminStrategiesService {
   }
 
   private async sumAuditAmountUsdForWalletsSince(
-    client: SupabaseClient,
     walletChunk: string[],
     createdAtGte: string
   ): Promise<number> {
-    const pageSize = 1000;
-    let offset = 0;
+    const rows = await this.audit.query("amount_in", {
+      whereIn: { column: "wallet_address", values: walletChunk },
+      gte: { column: "created_at", value: createdAtGte },
+      notNull: "amount_in",
+    });
     let sum = 0;
-    for (;;) {
-      const { data, error } = await client
-        .from("audit_logs")
-        .select("amount_in")
-        .in("wallet_address", walletChunk)
-        .gte("created_at", createdAtGte)
-        .not("amount_in", "is", null)
-        .eq("network", "mainnet")
-        .order("id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
-
-      if (error || !data?.length) break;
-      const rows = data as Record<string, unknown>[];
-      for (const r of rows) {
-        const v = Number(r.amount_in);
-        if (Number.isFinite(v) && v > 0) sum += v;
-      }
-      if (rows.length < pageSize) break;
-      offset += pageSize;
+    for (const r of rows) {
+      const v = Number(r.amount_in);
+      if (Number.isFinite(v) && v > 0) sum += v;
     }
     return sum;
   }
@@ -353,7 +342,6 @@ export class AdminStrategiesService {
     for (let i = 0; i < walletList.length; i += walletChunkSize) {
       const wchunk = walletList.slice(i, i + walletChunkSize);
       total += await this.sumAuditAmountUsdForWalletsSince(
-        client,
         wchunk,
         strategy.created_at
       );
