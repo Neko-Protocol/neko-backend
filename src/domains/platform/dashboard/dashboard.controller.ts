@@ -38,7 +38,7 @@ export class DashboardController {
 
   @Get("pool-catalog")
   @ApiOperation({
-    summary: "Pool catalog (blend/aqua/soroswap). Cached 5min, shared.",
+    summary: "Pool catalog (Blend/Aqua). Cached 5min, shared.",
   })
   getPoolCatalog(): Promise<DashboardPoolCatalogResponse> {
     return this.svc.getPoolCatalog();

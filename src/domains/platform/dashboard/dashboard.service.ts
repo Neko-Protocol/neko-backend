@@ -27,7 +27,7 @@ const TTL_POSITIONS_MS = 30_000;
 const TTL_POOL_CATALOG_MS = 5 * 60_000;
 const TTL_PRICES_MS = 60_000;
 
-const POOL_CATALOG_LIMITS = { blend: 5, aqua: 5, soroswap: 5 } as const;
+const POOL_CATALOG_LIMITS = { blend: 5, aqua: 5 } as const;
 const ONE_SHARE = 1_000_000_000_000n;
 
 type SdkResultLike = { unwrap?: () => unknown; tag?: string; value?: unknown };
@@ -148,7 +148,7 @@ export class DashboardService {
 
   private async loadPoolCatalog(): Promise<DashboardPoolCatalogResponse> {
     const orchestrator = this.orchestratorSvc.orchestrator;
-    const [blend, aqua, soroswap] = await Promise.all([
+    const [blend, aqua] = await Promise.all([
       orchestrator
         .getPoolsByType("blend", POOL_CATALOG_LIMITS.blend)
         .catch((e) => {
@@ -165,20 +165,11 @@ export class DashboardService {
           );
           return [] as PoolInfo[];
         }),
-      orchestrator
-        .getPoolsByType("soroswap", POOL_CATALOG_LIMITS.soroswap)
-        .catch((e) => {
-          this.logger.warn(
-            `[dashboard] soroswap pools failed: ${(e as Error).message}`
-          );
-          return [] as PoolInfo[];
-        }),
     ]);
 
     return {
       blend: blend.map(serializePool),
       aqua: aqua.map(serializePool),
-      soroswap: soroswap.map(serializePool),
       fetchedAt: Date.now(),
     };
   }
@@ -202,33 +193,26 @@ export class DashboardService {
   ): Promise<DashboardPoolPositionEntry[]> {
     const orchestrator = this.orchestratorSvc.orchestrator;
 
-    const [blendPools, aquaPools, soroswapPools, blendPositions] =
-      await Promise.all([
-        orchestrator
-          .getPoolsByType("blend", POOL_CATALOG_LIMITS.blend)
-          .catch((e: Error) => {
-            this.logger.warn(`[dashboard] blend pools failed: ${e.message}`);
-            return [] as PoolInfo[];
-          }),
-        orchestrator
-          .getPoolsByType("aqua", POOL_CATALOG_LIMITS.aqua)
-          .catch((e: Error) => {
-            this.logger.warn(`[dashboard] aqua pools failed: ${e.message}`);
-            return [] as PoolInfo[];
-          }),
-        orchestrator
-          .getPoolsByType("soroswap", POOL_CATALOG_LIMITS.soroswap)
-          .catch((e: Error) => {
-            this.logger.warn(`[dashboard] soroswap pools failed: ${e.message}`);
-            return [] as PoolInfo[];
-          }),
-        orchestrator.getAllBlendUserPositions(wallet).catch((e: Error) => {
-          this.logger.warn(`[dashboard] blend positions failed: ${e.message}`);
-          return [] as PoolPosition[];
+    const [blendPools, aquaPools, blendPositions] = await Promise.all([
+      orchestrator
+        .getPoolsByType("blend", POOL_CATALOG_LIMITS.blend)
+        .catch((e: Error) => {
+          this.logger.warn(`[dashboard] blend pools failed: ${e.message}`);
+          return [] as PoolInfo[];
         }),
-      ]);
+      orchestrator
+        .getPoolsByType("aqua", POOL_CATALOG_LIMITS.aqua)
+        .catch((e: Error) => {
+          this.logger.warn(`[dashboard] aqua pools failed: ${e.message}`);
+          return [] as PoolInfo[];
+        }),
+      orchestrator.getAllBlendUserPositions(wallet).catch((e: Error) => {
+        this.logger.warn(`[dashboard] blend positions failed: ${e.message}`);
+        return [] as PoolPosition[];
+      }),
+    ]);
 
-    const nonBlendPools = [...aquaPools, ...soroswapPools];
+    const nonBlendPools = aquaPools;
     const lpPoolIds =
       nonBlendPools.length > 0
         ? await batchCheckLpBalances(this.stellar.rpc, nonBlendPools, wallet)

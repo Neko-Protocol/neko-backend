@@ -29,9 +29,10 @@ jest.mock("@neko/reflector", () => ({
 jest.mock("@neko/defindex-vault", () => ({
   Client: jest.fn().mockImplementation(() => ({})),
 }));
-jest.mock("@soroswap/sdk", () => ({
-  SoroswapSDK: jest.fn().mockImplementation(() => ({})),
-  SupportedNetworks: { MAINNET: "MAINNET", TESTNET: "TESTNET" },
+jest.mock("@xbullcorp/swap-kit", () => ({
+  SwapKit: jest.fn().mockImplementation(() => ({
+    quote: jest.fn().mockRejectedValue(new Error("not configured")),
+  })),
 }));
 jest.mock("@neko/keeper", () => ({
   StellarPriceService: jest.fn().mockImplementation(() => ({

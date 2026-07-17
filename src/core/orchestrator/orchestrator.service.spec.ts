@@ -1,11 +1,7 @@
 import { Test } from "@nestjs/testing";
 import { ConfigModule } from "@nestjs/config";
 
-const mockAdapters = [
-  { type: "blend" },
-  { type: "soroswap" },
-  { type: "aqua" },
-];
+const mockAdapters = [{ type: "blend" }, { type: "aqua" }];
 const mockOrchestrator = { __mock: "orchestrator" };
 const mockPoolRegistry = {
   getAdapters: jest.fn().mockReturnValue(mockAdapters),
@@ -68,7 +64,7 @@ describe("OrchestratorService", () => {
       .map((a: { type: string }) => a.type)
       .sort();
     expect(types).toContain("blend");
-    expect(types).toContain("soroswap");
+    expect(types).not.toContain("soroswap");
     expect(types).toContain("aqua");
   });
 
