@@ -105,7 +105,7 @@ describe("XdrValidator.parseAndValidate", () => {
 
     it("rejects raw mint/burn/transfer/approve on an asset SAC", () => {
       // Token writes must only appear as nested authorized sub-invocations
-      // inside protocol calls (Blend submit, Soroswap swap, etc.), never as
+      // inside protocol calls (Blend submit, Aqua swap, etc.), never as
       // top-level ops — see contract-allowlist.ts for the rationale.
       const USDC_SAC =
         "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";

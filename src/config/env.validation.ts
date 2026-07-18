@@ -30,8 +30,6 @@ export const envValidationSchema = Joi.object({
 
   INTERNAL_API_KEY: Joi.string().min(32).required(),
 
-  SOROSWAP_API_KEY: Joi.string().optional().allow(""),
-
   VAULT_MANAGER_SECRET_KEY: Joi.string()
     .pattern(/^S[A-Z2-7]{55}$/)
     .optional()

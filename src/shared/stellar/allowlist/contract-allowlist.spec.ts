@@ -150,7 +150,7 @@ describe("ContractAllowlist (mainnet)", () => {
 
     it("rejects raw SAC token-write functions as top-level ops", () => {
       // transfer/approve/mint/burn must only appear as nested authorized
-      // sub-invocations inside protocol calls (Blend pool submit, Soroswap
+      // sub-invocations inside protocol calls (Blend pool submit, Aqua
       // swap, etc.), never as top-level ops — otherwise a signed XDR could
       // drain funds to arbitrary destinations via the relay.
       for (const fn of ["mint", "burn", "transfer", "approve"]) {

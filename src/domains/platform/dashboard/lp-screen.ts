@@ -35,15 +35,6 @@ function extractLpCandidates(pools: PoolInfo[]): LpCandidate[] {
           type: pool.type,
         });
       }
-    } else if (pool.type === "soroswap") {
-      const addr = pool.metadata?.poolAddress as string | undefined;
-      if (addr) {
-        candidates.push({
-          poolId: pool.id,
-          lpTokenAddress: addr,
-          type: pool.type,
-        });
-      }
     }
   }
   return candidates;

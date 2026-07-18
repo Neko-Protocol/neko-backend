@@ -71,8 +71,6 @@ const AQUARIUS_POOL =
   "CBJPT2SCZSUJQGBZHHCHLZJX3GVYLOPVUKF53ESH4NFQZMC2UFPDWHRI";
 const AQUARIUS_STRATEGY =
   "CCGV5QSAFRT6OGBZNCE72I6BAODXLDMWEUYAOBI5ZBLHOURSEGVGFTTZ";
-const SOROSWAP_STRATEGY =
-  "CCY5WW3VXVJDBBXNYXCCH33XTQICHPU6RPFWYJJCT4PTYPN3SXJN2XBJ";
 const NEKO_STRATEGY =
   "CCCEWBCYSIHTGBJ2TUOAFQY63UJ4SWDYTYNAEGXWPB7FP6PRHHGVZJIR";
 
@@ -186,11 +184,6 @@ export class VaultApyService {
     } catch {
       return null;
     }
-  }
-
-  // ─── Soroswap APY ───────────────────────────────────────────────────────
-  private async getSoroswapApy(): Promise<number | null> {
-    return null;
   }
 
   // ─── Vault allocations ──────────────────────────────────────────────────
@@ -340,13 +333,11 @@ export class VaultApyService {
         ...(rpcUrl.startsWith("http://") ? { allowHttp: true } : {}),
       });
 
-      const [nekoApy, aquariusApy, soroswapApy, allocations] =
-        await Promise.all([
-          this.getNekoApy(keypair.publicKey()),
-          this.getAquariusApy(),
-          this.getSoroswapApy(),
-          this.getAllocations(client),
-        ]);
+      const [nekoApy, aquariusApy, allocations] = await Promise.all([
+        this.getNekoApy(keypair.publicKey()),
+        this.getAquariusApy(),
+        this.getAllocations(client),
+      ]);
 
       const strategies = [
         {
@@ -360,12 +351,6 @@ export class VaultApyService {
           address: AQUARIUS_STRATEGY,
           apy: aquariusApy,
           weight: allocations[AQUARIUS_STRATEGY] ?? 0,
-        },
-        {
-          name: "Soroswap",
-          address: SOROSWAP_STRATEGY,
-          apy: soroswapApy,
-          weight: allocations[SOROSWAP_STRATEGY] ?? 0,
         },
       ];
 
@@ -392,10 +377,6 @@ export class VaultApyService {
           apy: s.apy !== null ? parseFloat(s.apy.toFixed(4)) : null,
           weight: parseFloat((s.weight * 100).toFixed(4)),
         })),
-        note:
-          soroswapApy === null
-            ? "Soroswap APY not available - trading fee yield requires volume data"
-            : undefined,
       };
     }
 
