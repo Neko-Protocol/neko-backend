@@ -6,7 +6,11 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { UserPreferences, UserPublic } from "@neko/api-contracts";
+import {
+  ErrorCode,
+  type UserPreferences,
+  type UserPublic,
+} from "@neko/api-contracts";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ReferralsService } from "../referrals/referrals.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
@@ -164,19 +168,23 @@ export class UsersService {
     const email = dto.email?.trim().toLowerCase();
 
     if (!wallet) {
-      throw new BadRequestException({ code: "wallet_required" });
+      throw new BadRequestException({ code: ErrorCode.WALLET_REQUIRED });
     }
     if (!email || !EMAIL_RE.test(email)) {
-      throw new BadRequestException({ code: "invalid_email" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_EMAIL });
     }
 
     if (!this.authClient) {
-      throw new InternalServerErrorException({ code: "not_configured" });
+      throw new InternalServerErrorException({
+        code: ErrorCode.NOT_CONFIGURED,
+      });
     }
 
     const baseUrl = this.webAppBaseUrl;
     if (!baseUrl) {
-      throw new InternalServerErrorException({ code: "not_configured" });
+      throw new InternalServerErrorException({
+        code: ErrorCode.NOT_CONFIGURED,
+      });
     }
 
     const { error: upsertError } = await this.supabase.client
@@ -193,7 +201,7 @@ export class UsersService {
 
     if (upsertError) {
       throw new InternalServerErrorException({
-        code: "db_error",
+        code: ErrorCode.DB_ERROR,
         message: upsertError.message ?? "db_error",
       });
     }
@@ -210,7 +218,7 @@ export class UsersService {
 
     if (error) {
       throw new InternalServerErrorException({
-        code: "send_failed",
+        code: ErrorCode.EMAIL_SEND_FAILED,
         message: error.message ?? "send_failed",
       });
     }
@@ -266,16 +274,18 @@ export class UsersService {
     const wallet = dto.wallet?.trim();
     const accessToken = dto.access_token?.trim();
     if (!wallet || !accessToken) {
-      throw new BadRequestException({ code: "missing_params" });
+      throw new BadRequestException({ code: ErrorCode.MISSING_PARAMS });
     }
 
     if (!this.authClient) {
-      throw new InternalServerErrorException({ code: "not_configured" });
+      throw new InternalServerErrorException({
+        code: ErrorCode.NOT_CONFIGURED,
+      });
     }
 
     const { data, error } = await this.authClient.auth.getUser(accessToken);
     if (error || !data?.user?.email) {
-      throw new UnauthorizedException({ code: "invalid_token" });
+      throw new UnauthorizedException({ code: ErrorCode.INVALID_TOKEN });
     }
 
     const { error: updateError } = await this.supabase.client
@@ -288,7 +298,9 @@ export class UsersService {
       .eq("wallet_address", wallet);
 
     if (updateError) {
-      throw new InternalServerErrorException({ code: "update_failed" });
+      throw new InternalServerErrorException({
+        code: ErrorCode.UPDATE_FAILED,
+      });
     }
 
     return { ok: true };

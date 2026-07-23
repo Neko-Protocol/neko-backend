@@ -9,6 +9,7 @@ import {
   Post,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ErrorCode } from "@neko/api-contracts";
 import {
   CreateRecommendedDto,
   UpdateRecommendedDto,
@@ -42,7 +43,7 @@ export class RecommendedStrategiesController {
   @ApiOperation({ summary: "Get a recommended strategy." })
   async get(@Param("id") id: string) {
     const row = await this.svc.get(id);
-    if (!row) throw new NotFoundException({ code: "NOT_FOUND" });
+    if (!row) throw new NotFoundException({ code: ErrorCode.NOT_FOUND });
     return row;
   }
 

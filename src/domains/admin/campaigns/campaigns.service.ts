@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { ErrorCode } from "@neko/api-contracts";
 import { EmailService } from "@core/email/email.service";
 import { SegmentsService } from "../segments/segments.service";
 import { isSegmentId } from "../segments/segments.types";
@@ -129,11 +130,13 @@ export class CampaignsService {
     const name = body.name.trim();
     const subject = body.subject.trim();
     if (!name || !subject) {
-      throw new BadRequestException({ code: "NAME_AND_SUBJECT_REQUIRED" });
+      throw new BadRequestException({
+        code: ErrorCode.NAME_AND_SUBJECT_REQUIRED,
+      });
     }
     const segmentRaw = typeof body.segment === "string" ? body.segment : "all";
     if (!isSegmentId(segmentRaw)) {
-      throw new BadRequestException({ code: "INVALID_SEGMENT" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_SEGMENT });
     }
 
     const { data: inserted, error } = await this.supabase.client
@@ -154,33 +157,39 @@ export class CampaignsService {
         ? this.mapRow(inserted as Record<string, unknown>)
         : null;
     if (!campaign) {
-      throw new BadRequestException({ code: "CAMPAIGN_CREATE_FAILED" });
+      throw new BadRequestException({
+        code: ErrorCode.CAMPAIGN_CREATE_FAILED,
+      });
     }
     return campaign;
   }
 
   async update(id: string, body: UpdateCampaignDto): Promise<Campaign> {
     const campaign = await this.get(id);
-    if (!campaign) throw new NotFoundException({ code: "NOT_FOUND" });
+    if (!campaign) throw new NotFoundException({ code: ErrorCode.NOT_FOUND });
     if (campaign.status !== "draft") {
-      throw new BadRequestException({ code: "ONLY_DRAFT_EDITABLE" });
+      throw new BadRequestException({
+        code: ErrorCode.ONLY_DRAFT_EDITABLE,
+      });
     }
 
     const payload: Record<string, string> = {};
     if (body.name !== undefined) {
       const v = body.name.trim();
-      if (!v) throw new BadRequestException({ code: "INVALID_NAME" });
+      if (!v) throw new BadRequestException({ code: ErrorCode.INVALID_NAME });
       payload.name = v;
     }
     if (body.subject !== undefined) {
       const v = body.subject.trim();
-      if (!v) throw new BadRequestException({ code: "INVALID_SUBJECT" });
+      if (!v) {
+        throw new BadRequestException({ code: ErrorCode.INVALID_SUBJECT });
+      }
       payload.subject = v;
     }
     if (body.body_html !== undefined) payload.body_html = body.body_html;
     if (body.segment !== undefined) {
       if (!isSegmentId(body.segment)) {
-        throw new BadRequestException({ code: "INVALID_SEGMENT" });
+        throw new BadRequestException({ code: ErrorCode.INVALID_SEGMENT });
       }
       payload.segment = body.segment;
     }
@@ -191,7 +200,9 @@ export class CampaignsService {
         .update(payload)
         .eq("id", id);
       if (error) {
-        throw new BadRequestException({ code: "CAMPAIGN_UPDATE_FAILED" });
+        throw new BadRequestException({
+          code: ErrorCode.CAMPAIGN_UPDATE_FAILED,
+        });
       }
     }
 
@@ -214,12 +225,14 @@ export class CampaignsService {
       .from("campaigns")
       .update({ tvl_moved })
       .eq("id", id);
-    if (error) throw new BadRequestException({ code: "TVL_UPDATE_FAILED" });
+    if (error) {
+      throw new BadRequestException({ code: ErrorCode.TVL_UPDATE_FAILED });
+    }
   }
 
   async preview(id: string): Promise<{ count: number; sample: string[] }> {
     const campaign = await this.get(id);
-    if (!campaign) throw new NotFoundException({ code: "NOT_FOUND" });
+    if (!campaign) throw new NotFoundException({ code: ErrorCode.NOT_FOUND });
 
     const segmentId = isSegmentId(campaign.segment) ? campaign.segment : null;
     if (!segmentId) return { count: 0, sample: [] };
@@ -243,13 +256,13 @@ export class CampaignsService {
 
   async send(id: string): Promise<{ ok: true; sent: number }> {
     const campaign = await this.get(id);
-    if (!campaign) throw new NotFoundException({ code: "NOT_FOUND" });
+    if (!campaign) throw new NotFoundException({ code: ErrorCode.NOT_FOUND });
 
     if (campaign.status === "sent") {
-      throw new BadRequestException({ code: "ALREADY_SENT" });
+      throw new BadRequestException({ code: ErrorCode.ALREADY_SENT });
     }
     if (campaign.status === "sending") {
-      throw new BadRequestException({ code: "SEND_IN_PROGRESS" });
+      throw new BadRequestException({ code: ErrorCode.SEND_IN_PROGRESS });
     }
 
     if (campaign.status === "failed") {
@@ -260,17 +273,19 @@ export class CampaignsService {
     }
 
     if (!this.email.isConfigured) {
-      throw new BadRequestException({ code: "RESEND_NOT_CONFIGURED" });
+      throw new BadRequestException({
+        code: ErrorCode.RESEND_NOT_CONFIGURED,
+      });
     }
 
     const segmentId = isSegmentId(campaign.segment) ? campaign.segment : null;
     if (!segmentId) {
-      throw new BadRequestException({ code: "INVALID_SEGMENT" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_SEGMENT });
     }
 
     const recipients = await this.segments.getSegmentRecipients(segmentId);
     if (recipients.length === 0) {
-      throw new BadRequestException({ code: "NO_RECIPIENTS" });
+      throw new BadRequestException({ code: ErrorCode.NO_RECIPIENTS });
     }
 
     await this.setStatus(id, "sending");
@@ -293,7 +308,7 @@ export class CampaignsService {
     } catch (e) {
       await this.setStatus(id, "failed");
       const message = e instanceof Error ? e.message : "Send failed";
-      throw new BadRequestException({ code: "SEND_FAILED", message });
+      throw new BadRequestException({ code: ErrorCode.SEND_FAILED, message });
     }
   }
 }

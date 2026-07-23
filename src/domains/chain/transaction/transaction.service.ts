@@ -11,6 +11,7 @@ import {
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
+import { ErrorCode } from "@neko/api-contracts";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { PreparedTxCache } from "./cache/prepared-tx-cache";
 import { XdrValidator } from "./validation/xdr-validator";
@@ -84,7 +85,7 @@ export class TransactionService {
     try {
       tx = TransactionBuilder.fromXDR(dto.signedXdr, passphrase);
     } catch {
-      throw new BadRequestException({ code: "INVALID_XDR", traceId });
+      throw new BadRequestException({ code: ErrorCode.INVALID_XDR, traceId });
     }
     if (tx instanceof FeeBumpTransaction) {
       this.logger.warn({
@@ -93,7 +94,10 @@ export class TransactionService {
         traceId,
         ip,
       });
-      throw new ForbiddenException({ code: "SUBMIT_REJECTED", traceId });
+      throw new ForbiddenException({
+        code: ErrorCode.SUBMIT_REJECTED,
+        traceId,
+      });
     }
 
     const sourceAccount = tx.source;
@@ -108,7 +112,10 @@ export class TransactionService {
         sourceAccount,
         hash: recomputedHash,
       });
-      return new ForbiddenException({ code: "SUBMIT_REJECTED", traceId });
+      return new ForbiddenException({
+        code: ErrorCode.SUBMIT_REJECTED,
+        traceId,
+      });
     };
 
     const cached = this.cache.consume(sourceAccount);
@@ -191,7 +198,7 @@ export class TransactionService {
         traceId,
         error: isProd()
           ? undefined
-          : { code: "RPC_ERROR", message: extractMessage(err) },
+          : { code: ErrorCode.RPC_ERROR, message: extractMessage(err) },
       };
     }
   }
@@ -243,7 +250,7 @@ export class TransactionService {
         status: "FAILED",
         hash,
         error: {
-          code: "TRANSACTION_FAILED",
+          code: ErrorCode.TRANSACTION_FAILED,
           message: decoded ? formatDecodedResult(decoded) : undefined,
         },
         traceId,

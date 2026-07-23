@@ -7,6 +7,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import { timingSafeEqual } from "crypto";
+import { ErrorCode } from "@neko/api-contracts";
 import { SKIP_AUTH_KEY } from "../decorators/skip-auth.decorator";
 
 const HEADER_NAME = "x-internal-key";
@@ -34,7 +35,7 @@ export class InternalApiKeyGuard implements CanActivate {
     const expected = this.config.get<string>("INTERNAL_API_KEY");
 
     if (!expected || !presented || !safeEqual(presented, expected)) {
-      throw new UnauthorizedException({ code: "UNAUTHORIZED" });
+      throw new UnauthorizedException({ code: ErrorCode.UNAUTHORIZED });
     }
     return true;
   }

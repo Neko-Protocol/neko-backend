@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { ErrorCode } from "@neko/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { AuditService } from "@domains/platform/audit/audit.service";
 import { CreateStrategyDto } from "./dto/create-strategy.dto";
@@ -175,11 +176,11 @@ export class AdminStrategiesService {
   async create(body: CreateStrategyDto): Promise<Strategy> {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) {
-      throw new BadRequestException({ code: "NAME_REQUIRED" });
+      throw new BadRequestException({ code: ErrorCode.NAME_REQUIRED });
     }
     const typeRaw = typeof body.type === "string" ? body.type.trim() : "";
     if (!isStrategyType(typeRaw)) {
-      throw new BadRequestException({ code: "INVALID_STRATEGY_TYPE" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_STRATEGY_TYPE });
     }
 
     const descriptionRaw =
@@ -224,7 +225,9 @@ export class AdminStrategiesService {
         ? this.mapRow(inserted as Record<string, unknown>)
         : null;
     if (!strategy) {
-      throw new BadRequestException({ code: "STRATEGY_CREATE_FAILED" });
+      throw new BadRequestException({
+        code: ErrorCode.STRATEGY_CREATE_FAILED,
+      });
     }
     return strategy;
   }
@@ -245,7 +248,9 @@ export class AdminStrategiesService {
     }
     if (typeof body.type === "string") {
       if (!isStrategyType(body.type)) {
-        throw new BadRequestException({ code: "INVALID_STRATEGY_TYPE" });
+        throw new BadRequestException({
+          code: ErrorCode.INVALID_STRATEGY_TYPE,
+        });
       }
       patch.type = body.type;
     }
@@ -261,7 +266,7 @@ export class AdminStrategiesService {
     if (typeof body.status === "string") {
       const s = body.status.trim().toLowerCase();
       if (!isStrategyStatus(s)) {
-        throw new BadRequestException({ code: "INVALID_STATUS" });
+        throw new BadRequestException({ code: ErrorCode.INVALID_STATUS });
       }
       patch.status = s;
     }

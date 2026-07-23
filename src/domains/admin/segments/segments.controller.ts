@@ -1,5 +1,6 @@
 import { BadRequestException, Controller, Get, Param } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ErrorCode } from "@neko/api-contracts";
 import { SegmentsService } from "./segments.service";
 import { isSegmentId } from "./segments.types";
 
@@ -12,7 +13,7 @@ export class SegmentsController {
   @ApiOperation({ summary: "Recipient count for a segment." })
   async count(@Param("id") id: string) {
     if (!isSegmentId(id)) {
-      throw new BadRequestException({ code: "INVALID_SEGMENT" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_SEGMENT });
     }
     return { count: await this.svc.getSegmentCount(id) };
   }
