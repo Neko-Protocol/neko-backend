@@ -69,12 +69,6 @@ export const CONTRACT_ALLOWLIST: ReadonlyMap<string, ContractLabel> = new Map([
     "vault:TESOURO-blend",
   ],
 
-  // ── Soroswap ───────────────────────────────────────────────────────────────
-  [
-    "CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH",
-    "soroswap:router",
-  ],
-
   // ── Aqua AMM ───────────────────────────────────────────────────────────────
   ["CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK", "aqua:router"],
   ["CA6GAFOJCW4MGQQBUCQUSA3CLIH25G4SNKB2JHYKZCVWZTNW5VXMSC4O", "aqua:pool:01"],
@@ -109,7 +103,7 @@ export const ALLOWED_FUNCTION_NAMES: ReadonlySet<string> = new Set([
   "claim_rewards",
   "claimRewards",
   "submit",
-  // Soroswap / Aqua liquidity (top-level router entrypoints; `transfer` /
+  // Aqua liquidity (top-level router entrypoints; `transfer` /
   // `approve` happen as nested authorized sub-invocations inside these, not
   // as top-level ops, so we deliberately do NOT include raw SAC token writes
   // here. Adding them would let a signed XDR drain funds to arbitrary

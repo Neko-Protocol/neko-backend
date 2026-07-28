@@ -108,7 +108,7 @@ describe("DashboardService", () => {
       expect(first.blend).toHaveLength(1);
       expect(first.blend[0].tvl).toBe("100");
       expect(first.aqua).toEqual([]);
-      expect(orchestrator.getPoolsByType).toHaveBeenCalledTimes(3); // first call only
+      expect(orchestrator.getPoolsByType).toHaveBeenCalledTimes(2); // first call only
       expect(second).toEqual(first);
     });
   });
@@ -215,7 +215,7 @@ describe("DashboardService", () => {
       expect(a).toEqual(b);
       expect(c).toEqual(a);
       // getPoolsByType called once per type on the single fetch
-      expect(orchestrator.getPoolsByType).toHaveBeenCalledTimes(3);
+      expect(orchestrator.getPoolsByType).toHaveBeenCalledTimes(2);
       expect(orchestrator.getAllBlendUserPositions).toHaveBeenCalledTimes(1);
     });
 
@@ -314,13 +314,13 @@ describe("DashboardService", () => {
         getPriceWithSource: jest.fn((symbol: string) =>
           symbol === "BAD"
             ? Promise.reject(new Error("boom"))
-            : Promise.resolve({ price: 2, source: "soroswap" })
+            : Promise.resolve({ price: 2, source: "swap-kit" })
         ),
       };
       const { svc } = build({ orchestrator, priceService });
       const result = await svc.getPrices(["BAD", "OK"]);
       expect(result.prices).toEqual({
-        OK: { price: 2, source: "soroswap" },
+        OK: { price: 2, source: "swap-kit" },
       });
     });
   });

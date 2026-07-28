@@ -24,7 +24,6 @@ interface CatalogDestination {
 const POOL_PROTOCOL_LABEL: Record<PoolType, string> = {
   blend: "Blend",
   neko: "Neko",
-  soroswap: "Soroswap",
   aqua: "Aqua",
   custom: "Pool",
 };

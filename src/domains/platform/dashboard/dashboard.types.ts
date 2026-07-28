@@ -12,7 +12,7 @@ export interface DashboardTokenInfo {
 
 export interface DashboardPoolInfo {
   id: string;
-  type: "blend" | "neko" | "soroswap" | "aqua" | "custom";
+  type: "blend" | "neko" | "aqua" | "custom";
   name: string;
   tokens: DashboardTokenInfo[];
   tvl: string;
@@ -51,17 +51,11 @@ export interface DashboardPositionsResponse {
 export interface DashboardPoolCatalogResponse {
   blend: DashboardPoolInfo[];
   aqua: DashboardPoolInfo[];
-  soroswap: DashboardPoolInfo[];
   fetchedAt: number;
 }
 
 export type DashboardPriceSource =
-  | "reflector"
-  | "soroswap"
-  | "coingecko"
-  | "horizon"
-  | "fallback"
-  | "unknown";
+  "reflector" | "swap-kit" | "coingecko" | "horizon" | "fallback" | "unknown";
 
 export interface DashboardPricesResponse {
   prices: Record<string, { price: number; source: DashboardPriceSource }>;
