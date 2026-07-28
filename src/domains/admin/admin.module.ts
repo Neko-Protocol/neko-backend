@@ -4,6 +4,7 @@ import { AdminDashboardModule } from "./admin-dashboard/admin-dashboard.module";
 import { AdminStrategiesModule } from "./admin-strategies/admin-strategies.module";
 import { CampaignsModule } from "./campaigns/campaigns.module";
 import { InvitationsModule } from "./invitations/invitations.module";
+import { MailingModule } from "./mailing/mailing.module";
 import { SegmentsModule } from "./segments/segments.module";
 
 @Module({
@@ -13,6 +14,7 @@ import { SegmentsModule } from "./segments/segments.module";
     AdminStrategiesModule,
     CampaignsModule,
     InvitationsModule,
+    MailingModule,
     SegmentsModule,
   ],
 })

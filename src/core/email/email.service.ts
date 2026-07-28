@@ -54,6 +54,20 @@ export class EmailService {
     }
   }
 
+  /** Strict single send. Throws on failure (caller must handle success/failure). */
+  async sendStrict(message: EmailMessage): Promise<void> {
+    if (!this.client) {
+      throw new Error("RESEND_API_KEY not configured");
+    }
+    const { error } = await this.client.emails.send({
+      from: this.from,
+      to: [message.to],
+      subject: message.subject,
+      html: message.html,
+    });
+    if (error) throw new Error(error.message ?? "Resend send error");
+  }
+
   /** Best-effort single template send. Swallows errors (caller flow must not fail). */
   async sendTemplate(message: TemplateEmailMessage): Promise<void> {
     if (!this.client) return;
