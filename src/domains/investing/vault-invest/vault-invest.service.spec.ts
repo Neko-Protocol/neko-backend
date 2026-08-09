@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { Test } from "@nestjs/testing";
 import { ConfigModule } from "@nestjs/config";
 
