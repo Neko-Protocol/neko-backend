@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Keypair, rpc } from "@stellar/stellar-sdk";
 import { Client as DefindexVaultClient } from "@neko/defindex-vault";
 import {
+  REBALANCE_THRESHOLD_STROOPS,
   getConfiguredRebalanceVaultIds,
   getVaultRebalanceConfig,
   parseAllVaultIds,
@@ -53,6 +54,7 @@ function toStroops(amount: string): bigint {
 export class VaultInvestService {
   private readonly logger = new Logger(VaultInvestService.name);
   private readonly lastInvest = new Map<string, number>();
+  private readonly idleStreak = new Map<string, number>();
   private readonly secretKey: string | undefined;
   private readonly rpcUrl: string;
   private readonly networkPassphrase: string;
@@ -64,6 +66,7 @@ export class VaultInvestService {
   // top, so abort well before the account can no longer pay for a single one.
   private static readonly MIN_SPENDABLE_STROOPS = 10_000_000n;
   private static readonly LOW_BALANCE_STROOPS = 50_000_000n;
+  private static readonly IDLE_ALERT_RUNS = 3;
 
   constructor(
     config: ConfigService,
@@ -176,6 +179,33 @@ export class VaultInvestService {
         `Could not read keeper XLM balance for ${publicKey}: ${errorToString(e)}`
       );
       return null;
+    }
+  }
+
+  /**
+   * Flags vaults whose idle balance stays above the invest threshold across
+   * consecutive runs — the signature of a keeper that plans correctly but never
+   * lands its transaction.
+   */
+  private trackIdleStreak(
+    config: VaultRebalanceConfig,
+    idleStroops: bigint,
+    idleHuman: number,
+    rebalanceOk: boolean
+  ): void {
+    const stuck = idleStroops >= REBALANCE_THRESHOLD_STROOPS && !rebalanceOk;
+    if (!stuck) {
+      this.idleStreak.delete(config.vaultId);
+      return;
+    }
+
+    const streak = (this.idleStreak.get(config.vaultId) ?? 0) + 1;
+    this.idleStreak.set(config.vaultId, streak);
+
+    if (streak >= VaultInvestService.IDLE_ALERT_RUNS) {
+      this.logger.error(
+        `vault ${config.label} (${config.vaultId}) has ${idleHuman} idle above the invest threshold for ${streak} consecutive runs — these funds are not earning yield`
+      );
     }
   }
 
@@ -325,6 +355,13 @@ export class VaultInvestService {
       const rebalance = buildRebalanceSummary(plan, rebalanceTx);
       const rebalanceOk =
         !rebalance.attempted || rebalance.status === "SUCCESS";
+
+      this.trackIdleStreak(
+        config,
+        plan.idleAmount,
+        rebalance.idleAmount,
+        rebalanceOk
+      );
 
       return {
         vaultId: config.vaultId,
