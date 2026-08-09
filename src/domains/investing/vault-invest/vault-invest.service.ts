@@ -10,6 +10,7 @@ import {
   resolveVaultIdForApi,
   type VaultRebalanceConfig,
 } from "@neko/keeper";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { collectFees } from "./keeper/fees";
 import {
   amountToHuman,
@@ -37,6 +38,17 @@ export type {
   VaultKeeperResult,
 } from "./keeper/types";
 
+const BASE_RESERVE_STROOPS = 5_000_000n;
+const STROOPS_PER_XLM = 10_000_000;
+
+function xlm(stroops: bigint): string {
+  return (Number(stroops) / STROOPS_PER_XLM).toFixed(7);
+}
+
+function toStroops(amount: string): bigint {
+  return BigInt(Math.round(parseFloat(amount) * STROOPS_PER_XLM));
+}
+
 @Injectable()
 export class VaultInvestService {
   private readonly logger = new Logger(VaultInvestService.name);
@@ -48,8 +60,15 @@ export class VaultInvestService {
   private static readonly COOLDOWN_MS = 5 * 60 * 1000;
   private static readonly BATCH_TIME_BUDGET_MS = 280_000;
   private static readonly TX_TIME_RESERVE_MS = 55_000;
+  // A rebalance costs ~0.008 XLM and a full batch adds fee-collection txs on
+  // top, so abort well before the account can no longer pay for a single one.
+  private static readonly MIN_SPENDABLE_STROOPS = 10_000_000n;
+  private static readonly LOW_BALANCE_STROOPS = 50_000_000n;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly stellar: StellarRpcService
+  ) {
     this.secretKey =
       config.get<string>("VAULT_MANAGER_SECRET_KEY") || undefined;
     this.rpcUrl = config.getOrThrow<string>("STELLAR_RPC_URL");
@@ -127,6 +146,39 @@ export class VaultInvestService {
     return Date.now() + VaultInvestService.TX_TIME_RESERVE_MS < deadlineMs;
   }
 
+  /**
+   * XLM the keeper can actually spend on fees, i.e. balance minus the base
+   * reserve its subentries lock up. Returns null when Horizon is unreachable so
+   * a lookup failure never blocks a run on its own.
+   */
+  private async spendableStroops(publicKey: string): Promise<bigint | null> {
+    try {
+      const account = await this.stellar.horizon.loadAccount(publicKey);
+      const native = account.balances.find(
+        (b): b is typeof b & { asset_type: "native" } =>
+          b.asset_type === "native"
+      );
+      if (!native) return 0n;
+
+      const reservedEntries =
+        2 +
+        account.subentry_count +
+        (account.num_sponsoring ?? 0) -
+        (account.num_sponsored ?? 0);
+
+      return (
+        toStroops(native.balance) -
+        toStroops(native.selling_liabilities ?? "0") -
+        BigInt(reservedEntries) * BASE_RESERVE_STROOPS
+      );
+    } catch (e) {
+      this.logger.warn(
+        `Could not read keeper XLM balance for ${publicKey}: ${errorToString(e)}`
+      );
+      return null;
+    }
+  }
+
   private async executeKeeper(
     configs: VaultRebalanceConfig[],
     callMode: "batch" | "single",
@@ -141,6 +193,32 @@ export class VaultInvestService {
     const startedAt = Date.now();
     const deadlineMs = startedAt + VaultInvestService.BATCH_TIME_BUDGET_MS;
     const vaults: VaultKeeperResult[] = [];
+
+    const spendable = await this.spendableStroops(keypair.publicKey());
+    if (
+      spendable !== null &&
+      spendable < VaultInvestService.MIN_SPENDABLE_STROOPS
+    ) {
+      this.logger.error(
+        `keeper account ${keypair.publicKey()} has only ${xlm(spendable)} XLM spendable (minimum ${xlm(VaultInvestService.MIN_SPENDABLE_STROOPS)} XLM) — aborting run, no vault will be rebalanced until it is funded`
+      );
+      return configs.map((config) =>
+        skippedVaultResult(
+          config,
+          "insufficient_keeper_balance",
+          `Keeper account has ${xlm(spendable)} XLM spendable, not enough to pay transaction fees`
+        )
+      );
+    }
+
+    if (
+      spendable !== null &&
+      spendable < VaultInvestService.LOW_BALANCE_STROOPS
+    ) {
+      this.logger.warn(
+        `keeper account ${keypair.publicKey()} is low on XLM: ${xlm(spendable)} spendable — top it up before it can no longer pay fees`
+      );
+    }
 
     for (const config of configs) {
       if (!this.hasTransactionBudget(deadlineMs)) {

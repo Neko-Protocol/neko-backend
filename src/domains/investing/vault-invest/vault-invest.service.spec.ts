@@ -32,10 +32,30 @@ jest.mock("@neko/defindex-vault", () => ({
   Client: jest.fn().mockImplementation(() => ({})),
 }));
 
+import { Keypair } from "@stellar/stellar-sdk";
+import {
+  getConfiguredRebalanceVaultIds,
+  parseAllVaultIds,
+  getVaultRebalanceConfig,
+} from "@neko/keeper";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { VaultInvestService } from "./vault-invest.service";
 
 describe("VaultInvestService", () => {
-  const VALID_SECRET = "S" + "A".repeat(55);
+  // Throwaway keypair: the keeper only needs a decodable seed to reach the
+  // balance guard, and no test submits a transaction.
+  const VALID_SECRET = Keypair.random().secret();
+
+  const stellarStub = {
+    horizon: {
+      loadAccount: jest.fn().mockResolvedValue({
+        balances: [{ asset_type: "native", balance: "100.0000000" }],
+        subentry_count: 0,
+        num_sponsoring: 0,
+        num_sponsored: 0,
+      }),
+    },
+  };
 
   beforeEach(() => {
     process.env.VAULT_MANAGER_SECRET_KEY = VALID_SECRET;
@@ -47,7 +67,10 @@ describe("VaultInvestService", () => {
   async function buildModule() {
     return Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true })],
-      providers: [VaultInvestService],
+      providers: [
+        VaultInvestService,
+        { provide: StellarRpcService, useValue: stellarStub },
+      ],
     }).compile();
   }
 
@@ -57,6 +80,33 @@ describe("VaultInvestService", () => {
     expect(result.mode).toBe("batch");
     expect(result.vaults).toEqual([]);
     expect(result.success).toBe(true);
+  });
+
+  it("aborts the run when the keeper cannot pay transaction fees", async () => {
+    const vaultId = "CVAULT";
+    jest.mocked(parseAllVaultIds).mockReturnValueOnce([vaultId]);
+    jest.mocked(getConfiguredRebalanceVaultIds).mockReturnValueOnce([vaultId]);
+    jest.mocked(getVaultRebalanceConfig).mockReturnValueOnce({
+      vaultId,
+      label: "Test Vault",
+      strategies: [],
+    });
+    // 5 XLM balance fully locked by the base reserve of 8 subentries.
+    stellarStub.horizon.loadAccount.mockResolvedValueOnce({
+      balances: [{ asset_type: "native", balance: "5.0041160" }],
+      subentry_count: 8,
+      num_sponsoring: 0,
+      num_sponsored: 0,
+    });
+
+    const mod = await buildModule();
+    const result = await mod.get(VaultInvestService).runBatch("cron");
+
+    expect(result.success).toBe(false);
+    expect(result.vaults).toHaveLength(1);
+    expect(result.vaults[0].rebalance.reason).toBe(
+      "insufficient_keeper_balance"
+    );
   });
 
   it("runSingle returns no-vault legacy shape when the id does not resolve", async () => {
