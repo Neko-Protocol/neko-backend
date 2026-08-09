@@ -12,8 +12,24 @@ export class VaultInvestCron {
   async run(): Promise<void> {
     try {
       const result = await this.svc.runBatch("cron");
-      this.logger.log(
-        `vault-invest run completed (${result.vaults.length} vaults processed)`
+      const failed = result.vaults.filter((v) => !v.success);
+
+      if (failed.length === 0) {
+        this.logger.log(
+          `vault-invest run completed (${result.vaults.length} vaults processed)`
+        );
+        return;
+      }
+
+      this.logger.error(
+        `vault-invest run completed with ${failed.length}/${result.vaults.length} vaults failing: ${failed
+          .map(
+            (v) =>
+              `${v.label} [${v.rebalance.status}]${
+                v.warnings.length ? ` ${v.warnings.join("; ")}` : ""
+              }`
+          )
+          .join(" | ")}`
       );
     } catch (err) {
       this.logger.error(

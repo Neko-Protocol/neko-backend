@@ -12,6 +12,7 @@ import {
 } from "@neko/keeper";
 import { collectFees } from "./keeper/fees";
 import {
+  amountToHuman,
   buildRebalanceSummary,
   emptyFeesSummary,
   errorToString,
@@ -218,6 +219,9 @@ export class VaultInvestService {
         );
         if (rebalanceTx.status !== "SUCCESS") {
           warnings.push(`Rebalance returned ${rebalanceTx.status}`);
+          this.logger.error(
+            `vault ${config.label} (${config.vaultId}) rebalance did not land: ${rebalanceTx.status} — ${plan.publicInstructions.length} instruction(s), ${amountToHuman(plan.idleAmount)} idle`
+          );
         }
       } else if (plan.instructions.length > 0) {
         rebalanceTx = { hash: "", status: "skipped_timeout_budget" };
@@ -235,6 +239,9 @@ export class VaultInvestService {
       });
       if (!fees.feesCollected) {
         warnings.push("Fee collection did not complete successfully");
+        this.logger.warn(
+          `vault ${config.label} (${config.vaultId}) fee collection did not complete`
+        );
       }
 
       const rebalance = buildRebalanceSummary(plan, rebalanceTx);
