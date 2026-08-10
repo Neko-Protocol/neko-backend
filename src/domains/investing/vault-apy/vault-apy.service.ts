@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { ErrorCode } from "@neko/api-contracts";
 import {
   BASE_FEE,
   Keypair,
@@ -319,7 +320,9 @@ export class VaultApyService {
       const secretKey = this.config.get<string>("VAULT_MANAGER_SECRET_KEY");
       if (!secretKey) {
         // Mirrors the original 503: cannot simulate on-chain without the key.
-        throw new ServiceUnavailableException({ code: "not_configured" });
+        throw new ServiceUnavailableException({
+          code: ErrorCode.NOT_CONFIGURED,
+        });
       }
       const keypair = Keypair.fromSecret(secretKey);
       const rpcUrl = this.stellar.getSafeRpcUrl();

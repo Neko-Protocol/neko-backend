@@ -3,6 +3,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from "@nestjs/common";
+import { ErrorCode } from "@neko/api-contracts";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { BlendPoolAdapter } from "./adapters/blend-pool.adapter";
@@ -34,7 +35,7 @@ export class PoolRatesService {
     if (error) {
       this.logger.error("Failed to fetch pool rate history", error);
       throw new InternalServerErrorException({
-        code: "POOL_RATES_FETCH_FAILED",
+        code: ErrorCode.POOL_RATES_FETCH_FAILED,
       });
     }
 
@@ -78,7 +79,7 @@ export class PoolRatesService {
     if (error) {
       this.logger.error("Failed to insert pool rate history", error);
       throw new InternalServerErrorException({
-        code: "POOL_RATES_INSERT_FAILED",
+        code: ErrorCode.POOL_RATES_INSERT_FAILED,
       });
     }
 

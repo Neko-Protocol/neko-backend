@@ -22,6 +22,7 @@ import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { EmailService } from "@core/email/email.service";
 import { AuditService } from "@domains/platform/audit/audit.service";
+import { ErrorCode } from "@neko/api-contracts";
 import { CreateActivationDto } from "./dto/create-activation.dto";
 import { PrepareBatchPayoutDto } from "./dto/prepare-batch-payout.dto";
 import { PreparePayoutDto } from "./dto/prepare-payout.dto";
@@ -83,7 +84,7 @@ export class ActivationsService {
     );
     if (!emails.length) {
       throw new UnprocessableEntityException({
-        code: "NO_EMAILS",
+        code: ErrorCode.NO_EMAILS,
         message: "At least one valid email is required.",
       });
     }
@@ -101,7 +102,7 @@ export class ActivationsService {
 
     if (error || !activation) {
       this.logger.error(`create activation failed: ${error?.message}`);
-      throw new InternalServerErrorException({ code: "CREATE_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.CREATE_FAILED });
     }
 
     const { error: participantsError } = await this.supabase.client
@@ -116,7 +117,7 @@ export class ActivationsService {
       this.logger.error(
         `create participants failed: ${participantsError.message}`
       );
-      throw new InternalServerErrorException({ code: "CREATE_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.CREATE_FAILED });
     }
 
     if (dto.send_invites) {
@@ -136,7 +137,7 @@ export class ActivationsService {
       .eq("status", "pending");
 
     if (error) {
-      throw new InternalServerErrorException({ code: "GET_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.GET_FAILED });
     }
 
     const emails = (rows ?? []).map((r) => r.email as string);
@@ -163,7 +164,7 @@ export class ActivationsService {
       this.logger.error(
         `list activations failed: ${error?.message ?? rowsError?.message}`
       );
-      throw new InternalServerErrorException({ code: "LIST_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.LIST_FAILED });
     }
 
     const counts = new Map<
@@ -221,10 +222,10 @@ export class ActivationsService {
       ]);
 
     if (error || pErr) {
-      throw new InternalServerErrorException({ code: "GET_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.GET_FAILED });
     }
     if (!activation) {
-      throw new NotFoundException({ code: "ACTIVATION_NOT_FOUND" });
+      throw new NotFoundException({ code: ErrorCode.ACTIVATION_NOT_FOUND });
     }
 
     return {
@@ -246,7 +247,9 @@ export class ActivationsService {
       .order("matched_at", { ascending: true });
 
     if (error) {
-      throw new InternalServerErrorException({ code: "LIST_PAYABLE_FAILED" });
+      throw new InternalServerErrorException({
+        code: ErrorCode.LIST_PAYABLE_FAILED,
+      });
     }
     return data ?? [];
   }
@@ -258,13 +261,13 @@ export class ActivationsService {
 
     if (!participant.matched_wallet) {
       throw new UnprocessableEntityException({
-        code: "NOT_MATCHED",
+        code: ErrorCode.NOT_MATCHED,
         message: "Participant has no matched wallet.",
       });
     }
     if (participant.matched_wallet === dto.admin_wallet) {
       throw new UnprocessableEntityException({
-        code: "SELF_PAYOUT",
+        code: ErrorCode.SELF_PAYOUT,
         message: "Recipient and paying wallet are the same account.",
       });
     }
@@ -285,7 +288,7 @@ export class ActivationsService {
 
       if (!destinationExists && rewardXlm < 1) {
         throw new UnprocessableEntityException({
-          code: "UNFUNDED_RECIPIENT",
+          code: ErrorCode.UNFUNDED_RECIPIENT,
           message:
             "Recipient account is unfunded and the reward is below the 1 XLM minimum needed to create it.",
         });
@@ -322,12 +325,12 @@ export class ActivationsService {
       if (err instanceof UnprocessableEntityException) throw err;
       if (this.isHorizonNotFound(err)) {
         throw new UnprocessableEntityException({
-          code: "ADMIN_ACCOUNT_NOT_FOUND",
+          code: ErrorCode.ADMIN_ACCOUNT_NOT_FOUND,
           message: "Paying account not found on the network.",
         });
       }
       this.logger.error(`preparePayout failed: ${String(err)}`);
-      throw new BadGatewayException({ code: "HORIZON_ERROR" });
+      throw new BadGatewayException({ code: ErrorCode.HORIZON_ERROR });
     }
   }
 
@@ -335,7 +338,10 @@ export class ActivationsService {
     const participant = await this.loadParticipant(dto.participant_id);
     if (participant.status !== "paying") {
       throw new ConflictException({
-        code: participant.status === "paid" ? "ALREADY_PAID" : "NOT_PAYING",
+        code:
+          participant.status === "paid"
+            ? ErrorCode.ALREADY_PAID
+            : ErrorCode.NOT_PAYING,
         message: `Participant is '${participant.status}', expected 'paying'.`,
       });
     }
@@ -390,7 +396,7 @@ export class ActivationsService {
         `submitPayout failed for ${participant.id}: ${codes ?? String(err)}`
       );
       throw new BadGatewayException({
-        code: "SUBMIT_FAILED",
+        code: ErrorCode.SUBMIT_FAILED,
         message: codes
           ? `Transaction rejected: ${codes}`
           : "Failed to submit the payment to the network.",
@@ -415,11 +421,11 @@ export class ActivationsService {
       .order("matched_at", { ascending: true });
 
     if (listError) {
-      throw new InternalServerErrorException({ code: "GET_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.GET_FAILED });
     }
     if (!payableRows?.length) {
       throw new UnprocessableEntityException({
-        code: "NO_PAYABLE",
+        code: ErrorCode.NO_PAYABLE,
         message: "No payable participants for this activation.",
       });
     }
@@ -432,7 +438,7 @@ export class ActivationsService {
 
     if (!eligible.length) {
       throw new UnprocessableEntityException({
-        code: "SELF_PAYOUT_ONLY",
+        code: ErrorCode.SELF_PAYOUT_ONLY,
         message: "All participants in this chunk pay to the admin wallet.",
       });
     }
@@ -445,7 +451,7 @@ export class ActivationsService {
 
     if (!locked.length) {
       throw new ConflictException({
-        code: "ALL_LOCKED",
+        code: ErrorCode.ALL_LOCKED,
         message: "All eligible participants are already being paid.",
       });
     }
@@ -486,7 +492,7 @@ export class ActivationsService {
 
       if (!operations.length) {
         throw new UnprocessableEntityException({
-          code: "NO_ELIGIBLE",
+          code: ErrorCode.NO_ELIGIBLE,
           message:
             "No participants could be included (e.g. unfunded accounts below 1 XLM).",
         });
@@ -525,12 +531,12 @@ export class ActivationsService {
       }
       if (this.isHorizonNotFound(err)) {
         throw new UnprocessableEntityException({
-          code: "ADMIN_ACCOUNT_NOT_FOUND",
+          code: ErrorCode.ADMIN_ACCOUNT_NOT_FOUND,
           message: "Paying account not found on the network.",
         });
       }
       this.logger.error(`prepareBatchPayout failed: ${String(err)}`);
-      throw new BadGatewayException({ code: "HORIZON_ERROR" });
+      throw new BadGatewayException({ code: ErrorCode.HORIZON_ERROR });
     }
   }
 
@@ -545,7 +551,7 @@ export class ActivationsService {
       .eq("activation_id", dto.activation_id);
 
     if (error) {
-      throw new InternalServerErrorException({ code: "GET_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.GET_FAILED });
     }
 
     const paying = (rows ?? []).filter(
@@ -554,7 +560,7 @@ export class ActivationsService {
 
     if (!paying.length) {
       throw new ConflictException({
-        code: "NOT_PAYING",
+        code: ErrorCode.NOT_PAYING,
         message: "No participants in 'paying' state for this batch.",
       });
     }
@@ -621,7 +627,7 @@ export class ActivationsService {
         `submitBatchPayout failed for activation ${dto.activation_id}: ${codes ?? String(err)}`
       );
       throw new BadGatewayException({
-        code: "SUBMIT_FAILED",
+        code: ErrorCode.SUBMIT_FAILED,
         message: codes
           ? `Transaction rejected: ${codes}`
           : "Failed to submit the payment to the network.",
@@ -638,10 +644,10 @@ export class ActivationsService {
       .eq("id", id)
       .maybeSingle();
     if (error) {
-      throw new InternalServerErrorException({ code: "GET_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.GET_FAILED });
     }
     if (!data) {
-      throw new NotFoundException({ code: "PARTICIPANT_NOT_FOUND" });
+      throw new NotFoundException({ code: ErrorCode.PARTICIPANT_NOT_FOUND });
     }
     return data;
   }
@@ -653,7 +659,7 @@ export class ActivationsService {
       .eq("id", id)
       .maybeSingle();
     if (error || !data) {
-      throw new NotFoundException({ code: "ACTIVATION_NOT_FOUND" });
+      throw new NotFoundException({ code: ErrorCode.ACTIVATION_NOT_FOUND });
     }
     return data;
   }
@@ -691,7 +697,10 @@ export class ActivationsService {
 
     const fresh = await this.loadParticipant(participant.id);
     throw new ConflictException({
-      code: fresh.status === "paid" ? "ALREADY_PAID" : "ALREADY_PAYING",
+      code:
+        fresh.status === "paid"
+          ? ErrorCode.ALREADY_PAID
+          : ErrorCode.ALREADY_PAYING,
       message: `Participant is '${fresh.status}'.`,
     });
   }
@@ -724,7 +733,7 @@ export class ActivationsService {
     );
     if (!tx) {
       throw new UnprocessableEntityException({
-        code: "INVALID_XDR",
+        code: ErrorCode.INVALID_XDR,
         message: "Could not parse the signed transaction.",
       });
     }
@@ -750,7 +759,7 @@ export class ActivationsService {
       !matchesNativePayout(op, participant.matched_wallet, expectedAmount)
     ) {
       throw new UnprocessableEntityException({
-        code: "XDR_MISMATCH",
+        code: ErrorCode.XDR_MISMATCH,
         message:
           "Signed transaction does not match the expected payout destination/amount.",
       });
@@ -771,7 +780,7 @@ export class ActivationsService {
 
     if (tx.operations.length !== expectedDestinations.size) {
       throw new UnprocessableEntityException({
-        code: "XDR_MISMATCH",
+        code: ErrorCode.XDR_MISMATCH,
         message:
           "Signed transaction does not match the expected payout destination/amount.",
       });
@@ -790,7 +799,7 @@ export class ActivationsService {
         !matchesNativePayout(op, destination, expectedAmount)
       ) {
         throw new UnprocessableEntityException({
-          code: "XDR_MISMATCH",
+          code: ErrorCode.XDR_MISMATCH,
           message:
             "Signed transaction does not match the expected payout destination/amount.",
         });

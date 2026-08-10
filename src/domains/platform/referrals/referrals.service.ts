@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { randomBytes } from "crypto";
+import { ErrorCode } from "@neko/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -51,7 +52,7 @@ export class ReferralsService {
   async getOrCreateCode(wallet: string): Promise<{ code: string }> {
     const trimmed = wallet.trim();
     if (!trimmed) {
-      throw new NotFoundException({ code: "WALLET_REQUIRED" });
+      throw new NotFoundException({ code: ErrorCode.WALLET_REQUIRED });
     }
 
     const { data: existing } = await this.supabase.client
@@ -72,7 +73,7 @@ export class ReferralsService {
       // FK violation: the user row doesn't exist yet (register is
       // fire-and-forget, so tolerate the race by surfacing a 404).
       if (error.code === "23503") {
-        throw new NotFoundException({ code: "USER_NOT_FOUND" });
+        throw new NotFoundException({ code: ErrorCode.USER_NOT_FOUND });
       }
       // Unique violation: either the code collided (retry) or another
       // request created this wallet's code concurrently (re-read).
@@ -88,7 +89,9 @@ export class ReferralsService {
       this.logger.error(`create referral code failed: ${error.message}`);
       break;
     }
-    throw new InternalServerErrorException({ code: "CODE_CREATE_FAILED" });
+    throw new InternalServerErrorException({
+      code: ErrorCode.CODE_CREATE_FAILED,
+    });
   }
 
   /**
@@ -180,7 +183,7 @@ export class ReferralsService {
     });
     if (error) {
       this.logger.error(`referral_stats failed: ${error.message}`);
-      throw new InternalServerErrorException({ code: "STATS_FAILED" });
+      throw new InternalServerErrorException({ code: ErrorCode.STATS_FAILED });
     }
 
     const row = Array.isArray(data) ? data[0] : data;
@@ -203,7 +206,9 @@ export class ReferralsService {
 
     if (error) {
       this.logger.error(`getReferred failed: ${error.message}`);
-      throw new InternalServerErrorException({ code: "REFERRED_FAILED" });
+      throw new InternalServerErrorException({
+        code: ErrorCode.REFERRED_FAILED,
+      });
     }
 
     return (data ?? []).map((row) => ({
@@ -221,7 +226,9 @@ export class ReferralsService {
     );
     if (error) {
       this.logger.error(`referral_leaderboard failed: ${error.message}`);
-      throw new InternalServerErrorException({ code: "LEADERBOARD_FAILED" });
+      throw new InternalServerErrorException({
+        code: ErrorCode.LEADERBOARD_FAILED,
+      });
     }
 
     return (Array.isArray(data) ? data : []).map((row) => ({

@@ -8,6 +8,7 @@ import {
   Post,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ErrorCode } from "@neko/api-contracts";
 import { CampaignsService } from "./campaigns.service";
 import { CreateCampaignDto } from "./dto/create-campaign.dto";
 import {
@@ -42,7 +43,7 @@ export class CampaignsController {
   @ApiOperation({ summary: "Get a campaign." })
   async get(@Param("id") id: string) {
     const campaign = await this.svc.get(id);
-    if (!campaign) throw new NotFoundException({ code: "NOT_FOUND" });
+    if (!campaign) throw new NotFoundException({ code: ErrorCode.NOT_FOUND });
     return campaign;
   }
 
