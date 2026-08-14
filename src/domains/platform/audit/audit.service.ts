@@ -195,6 +195,26 @@ export class AuditService {
     }
   }
 
+  async listVaultActivity(wallet: string): Promise<Record<string, unknown>[]> {
+    try {
+      const { data } = await this.supabase.client
+        .from("audit_logs")
+        .select("*")
+        .eq("wallet_address", wallet)
+        .in("action_type", [
+          "vaults_deposit",
+          "vaults_withdraw",
+          "vaults_claim_earnings",
+        ])
+        .order("created_at", { ascending: false })
+        .limit(1_000);
+
+      return (data ?? []) as Record<string, unknown>[];
+    } catch {
+      return [];
+    }
+  }
+
   async countMainnet(): Promise<number> {
     const { count } = await this.supabase.client
       .from("audit_logs")
