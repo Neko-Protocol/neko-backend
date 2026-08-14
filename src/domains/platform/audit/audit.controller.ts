@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { AuditService } from "./audit.service";
@@ -18,6 +18,16 @@ export class AuditController {
   @ApiOperation({ summary: "Log a user action (swap, deposit, …)." })
   log(@Body() dto: CreateAuditDto) {
     return this.svc.log(dto);
+  }
+
+  @Get("vaults/:wallet")
+  @Throttle({
+    short: { limit: 10, ttl: 1_000 },
+    default: { limit: 30, ttl: 60_000 },
+  })
+  @ApiOperation({ summary: "List vault activity for a wallet." })
+  listVaultActivity(@Param("wallet") wallet: string) {
+    return this.svc.listVaultActivity(wallet);
   }
 
   @Get()
