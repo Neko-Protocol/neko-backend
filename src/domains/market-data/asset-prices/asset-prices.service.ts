@@ -20,6 +20,25 @@ export interface AssetPriceHistoryRow {
   recorded_at: string;
 }
 
+const HISTORY_WINDOW_DAYS = 30;
+const HISTORY_ROW_LIMIT = 10_000;
+
+function collapseToHourlySamples(
+  newestFirst: AssetPriceHistoryRow[]
+): AssetPriceHistoryRow[] {
+  const seenHours = new Set<string>();
+  const kept: AssetPriceHistoryRow[] = [];
+
+  for (const row of newestFirst) {
+    const hour = row.recorded_at.slice(0, 13);
+    if (seenHours.has(hour)) continue;
+    seenHours.add(hour);
+    kept.push(row);
+  }
+
+  return kept.reverse();
+}
+
 @Injectable()
 export class AssetPricesService {
   private readonly logger = new Logger(AssetPricesService.name);
@@ -77,19 +96,22 @@ export class AssetPricesService {
   }
 
   async getHistory(symbol: string): Promise<AssetPriceHistoryRow[]> {
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const since = new Date(
+      Date.now() - HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
     const { data, error } = await this.supabase.client
       .from("asset_price_history")
       .select("price, source, recorded_at")
       .eq("symbol", symbol.toUpperCase())
       .gte("recorded_at", since)
-      .order("recorded_at", { ascending: true });
+      .order("recorded_at", { ascending: false })
+      .limit(HISTORY_ROW_LIMIT);
 
     if (error) {
       this.logger.error(`[asset-prices] history failed: ${error.message}`);
       throw new Error(error.message);
     }
 
-    return (data ?? []) as AssetPriceHistoryRow[];
+    return collapseToHourlySamples((data ?? []) as AssetPriceHistoryRow[]);
   }
 }
