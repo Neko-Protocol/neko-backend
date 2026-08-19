@@ -9,6 +9,7 @@ import {
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { StrKey } from "@stellar/stellar-sdk";
+import { ErrorCode } from "@neko/api-contracts";
 import { DashboardService } from "./dashboard.service";
 import type {
   DashboardPoolCatalogResponse,
@@ -31,7 +32,7 @@ export class DashboardController {
     @Param("wallet") wallet: string
   ): Promise<DashboardPositionsResponse> {
     if (!StrKey.isValidEd25519PublicKey(wallet)) {
-      throw new BadRequestException({ code: "INVALID_WALLET" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_WALLET });
     }
     return this.svc.getPositions(wallet);
   }

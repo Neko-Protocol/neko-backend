@@ -110,6 +110,25 @@ describe("AuditService read methods", () => {
     expect(await svc.recent("id", 5)).toEqual([]);
   });
 
+  it("listVaultActivity filters vault actions without the generic 50-row cap", async () => {
+    const calls: Call[] = [];
+    const svc = makeService({ data: [{ id: 1 }], error: null }, calls);
+
+    expect(await svc.listVaultActivity("GVAULT")).toEqual([{ id: 1 }]);
+    expect(calls).toContainEqual({
+      method: "eq",
+      args: ["wallet_address", "GVAULT"],
+    });
+    expect(calls).toContainEqual({
+      method: "in",
+      args: [
+        "action_type",
+        ["vaults_deposit", "vaults_withdraw", "vaults_claim_earnings"],
+      ],
+    });
+    expect(calls).toContainEqual({ method: "limit", args: [1_000] });
+  });
+
   it("record inserts into audit_logs and reports ok", async () => {
     const calls: Call[] = [];
     const svc = makeService({ error: null }, calls);

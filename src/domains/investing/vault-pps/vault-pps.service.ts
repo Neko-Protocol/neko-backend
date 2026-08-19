@@ -21,12 +21,31 @@ export interface VaultPpsHistoryResult {
 
 const ONE_SHARE = 1_000_000_000_000n;
 
+function collapseToHourlySamples(
+  newestFirst: VaultPpsHistoryRow[]
+): VaultPpsHistoryRow[] {
+  const seenHours = new Set<string>();
+  const kept: VaultPpsHistoryRow[] = [];
+
+  for (const row of newestFirst) {
+    const hour = row.recorded_at.slice(0, 13);
+    if (seenHours.has(hour)) continue;
+    seenHours.add(hour);
+    kept.push(row);
+  }
+
+  return kept.reverse();
+}
+
 @Injectable()
 export class VaultPpsService {
   private readonly logger = new Logger(VaultPpsService.name);
   private readonly rpcUrl: string;
   private readonly networkPassphrase: string;
   private readonly allowHttp: boolean;
+
+  private static readonly HISTORY_WINDOW_DAYS = 30;
+  private static readonly HISTORY_ROW_LIMIT = 10_000;
 
   constructor(
     private readonly config: ConfigService,
@@ -89,20 +108,25 @@ export class VaultPpsService {
   }
 
   async getHistory(vaultId: string): Promise<VaultPpsHistoryResult> {
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const since = new Date(
+      Date.now() - VaultPpsService.HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
     const { data, error } = await this.supabase.client
       .from("vault_pps_history")
       .select("pps, recorded_at")
       .eq("vault_id", vaultId)
       .gte("recorded_at", since)
-      .order("recorded_at", { ascending: true });
+      .order("recorded_at", { ascending: false })
+      .limit(VaultPpsService.HISTORY_ROW_LIMIT);
 
     if (error) {
       this.logger.error(`[vault-pps] history failed: ${error.message}`);
       throw new Error(error.message);
     }
 
-    const series = (data ?? []) as VaultPpsHistoryRow[];
+    const series = collapseToHourlySamples(
+      (data ?? []) as VaultPpsHistoryRow[]
+    );
     const sevenDaysAgo = new Date(
       Date.now() - 7 * 24 * 60 * 60 * 1000
     ).toISOString();

@@ -10,6 +10,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ErrorCode } from "@neko/api-contracts";
 import { CreateInvitationDto } from "../invitations/dto/create-invitation.dto";
 import { InvitationsService } from "../invitations/invitations.service";
 import { isInvitationType } from "../invitations/invitations.types";
@@ -47,7 +48,7 @@ export class AdminStrategiesController {
   @ApiOperation({ summary: "Get a strategy." })
   async get(@Param("id") id: string) {
     const strategy = await this.svc.get(id);
-    if (!strategy) throw new NotFoundException({ code: "NOT_FOUND" });
+    if (!strategy) throw new NotFoundException({ code: ErrorCode.NOT_FOUND });
     return strategy;
   }
 
@@ -69,7 +70,8 @@ export class AdminStrategiesController {
   @ApiOperation({ summary: "Real USD volume from the invited cohort." })
   async realVolume(@Param("id") id: string) {
     const real = await this.svc.getRealVolumeUsd(id);
-    if (real === null) throw new NotFoundException({ code: "NOT_FOUND" });
+    if (real === null)
+      throw new NotFoundException({ code: ErrorCode.NOT_FOUND });
     return { real_volume: real };
   }
 

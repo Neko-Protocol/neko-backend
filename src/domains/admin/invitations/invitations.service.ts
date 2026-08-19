@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { ErrorCode } from "@neko/api-contracts";
 import { EmailService } from "@core/email/email.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { CreateInvitationDto } from "./dto/create-invitation.dto";
@@ -113,7 +114,7 @@ export class InvitationsService {
       typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!emailRaw || !EMAIL_RE.test(emailRaw)) {
       throw new BadRequestException({
-        code: "INVALID_EMAIL",
+        code: ErrorCode.INVALID_EMAIL,
         message: "Valid email address is required",
       });
     }
@@ -214,7 +215,9 @@ export class InvitationsService {
         ? this.mapRow(inserted as Record<string, unknown>)
         : null;
     if (!invitation) {
-      throw new BadRequestException({ code: "INVITATION_CREATE_FAILED" });
+      throw new BadRequestException({
+        code: ErrorCode.INVITATION_CREATE_FAILED,
+      });
     }
 
     await this.sendInviteEmail(invitation);
@@ -253,7 +256,9 @@ export class InvitationsService {
         ? this.mapRow(updated as Record<string, unknown>)
         : null;
     if (!invitation) {
-      throw new BadRequestException({ code: "INVITATION_ACCEPT_FAILED" });
+      throw new BadRequestException({
+        code: ErrorCode.INVITATION_ACCEPT_FAILED,
+      });
     }
     return invitation;
   }

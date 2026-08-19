@@ -7,6 +7,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ErrorCode } from "@neko/api-contracts";
 import { AdminAuthService } from "./admin-auth.service";
 import { VerifyPasswordDto } from "./dto/verify-password.dto";
 import { VerifyTotpDto } from "./dto/verify-totp.dto";
@@ -32,7 +33,9 @@ export class AdminAuthController {
   @ApiOperation({ summary: "Generate a TOTP secret + QR for provisioning." })
   totpSetup(@Query("email") email?: string) {
     const trimmed = (email ?? "").trim();
-    if (!trimmed) throw new BadRequestException({ code: "EMAIL_REQUIRED" });
+    if (!trimmed) {
+      throw new BadRequestException({ code: ErrorCode.EMAIL_REQUIRED });
+    }
     return this.svc.getTotpSetup(trimmed);
   }
 

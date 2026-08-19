@@ -8,13 +8,7 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import type { Request, Response } from "express";
-
-interface ErrorBody {
-  code: string;
-  message: string;
-  traceId: string;
-  details?: unknown;
-}
+import { ErrorCode, type ApiErrorBody } from "@neko/api-contracts";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -59,7 +53,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     });
 
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      code: "INTERNAL_SERVER_ERROR",
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
       message: isProd() ? "Internal server error" : message,
       traceId,
     });
@@ -69,13 +63,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     original: string | object,
     fallbackMessage: string,
     traceId: string
-  ): ErrorBody {
+  ): ApiErrorBody {
     if (typeof original === "string") {
-      return { code: "ERROR", message: original, traceId };
+      return { code: ErrorCode.ERROR, message: original, traceId };
     }
     const obj = original as Record<string, unknown>;
     return {
-      code: typeof obj.code === "string" ? obj.code : "ERROR",
+      code: typeof obj.code === "string" ? obj.code : ErrorCode.ERROR,
       message: typeof obj.message === "string" ? obj.message : fallbackMessage,
       traceId: typeof obj.traceId === "string" ? obj.traceId : traceId,
       ...(obj.details !== undefined && !isProd()

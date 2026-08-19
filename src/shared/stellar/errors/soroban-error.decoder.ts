@@ -7,6 +7,8 @@
  * job, not ours.
  */
 
+import { ErrorCode } from "@neko/api-contracts";
+
 export interface DecodedSorobanError {
   /** Stable identifier we can use to map → HttpException downstream. */
   code: string;
@@ -20,9 +22,11 @@ const HOST_OBJ_NOT_EXIST = /HostObjNotExist|HostObjectNotExist/i;
 const TX_INSUFFICIENT_FEE = /insufficient.+fee/i;
 const TX_BAD_SEQ = /tx_bad_seq|bad_sequence|BadSeq/i;
 const TX_NO_ACCOUNT = /tx_no_account|account.+not.+found/i;
-const TX_INSUFFICIENT_BALANCE = /tx_insufficient_balance|insufficient.+balance/i;
+const TX_INSUFFICIENT_BALANCE =
+  /tx_insufficient_balance|insufficient.+balance/i;
 const TX_AUTH_FAILED = /auth.+failed|missing.+auth|authorization/i;
-const CONTRACT_ERROR_NUM = /Contract\((\d+)\)|HostError:[^,]*Contract,\s*Error\((\d+)\)|ScError:Contract.*code:?\s*(\d+)/i;
+const CONTRACT_ERROR_NUM =
+  /Contract\((\d+)\)|HostError:[^,]*Contract,\s*Error\((\d+)\)|ScError:Contract.*code:?\s*(\d+)/i;
 
 export function decodeSorobanError(raw: unknown): DecodedSorobanError {
   const message = extractMessage(raw);
@@ -33,7 +37,7 @@ export function decodeSorobanError(raw: unknown): DecodedSorobanError {
     const code = Number(codeStr);
     if (!Number.isNaN(code)) {
       return {
-        code: "SOROBAN_CONTRACT_ERROR",
+        code: ErrorCode.SOROBAN_CONTRACT_ERROR,
         contractErrorCode: code,
         raw,
       };
@@ -41,25 +45,25 @@ export function decodeSorobanError(raw: unknown): DecodedSorobanError {
   }
 
   if (HOST_OBJ_NOT_EXIST.test(message)) {
-    return { code: "HOST_OBJECT_MISSING", raw };
+    return { code: ErrorCode.HOST_OBJECT_MISSING, raw };
   }
   if (TX_INSUFFICIENT_FEE.test(message)) {
-    return { code: "INSUFFICIENT_FEE", raw };
+    return { code: ErrorCode.INSUFFICIENT_FEE, raw };
   }
   if (TX_BAD_SEQ.test(message)) {
-    return { code: "BAD_SEQUENCE", raw };
+    return { code: ErrorCode.BAD_SEQUENCE, raw };
   }
   if (TX_NO_ACCOUNT.test(message)) {
-    return { code: "SOURCE_ACCOUNT_NOT_FOUND", raw };
+    return { code: ErrorCode.SOURCE_ACCOUNT_NOT_FOUND, raw };
   }
   if (TX_INSUFFICIENT_BALANCE.test(message)) {
-    return { code: "INSUFFICIENT_BALANCE", raw };
+    return { code: ErrorCode.INSUFFICIENT_BALANCE, raw };
   }
   if (TX_AUTH_FAILED.test(message)) {
-    return { code: "AUTH_FAILED", raw };
+    return { code: ErrorCode.AUTH_FAILED, raw };
   }
 
-  return { code: "SOROBAN_UNKNOWN_ERROR", raw };
+  return { code: ErrorCode.SOROBAN_UNKNOWN_ERROR, raw };
 }
 
 function extractMessage(raw: unknown): string {
