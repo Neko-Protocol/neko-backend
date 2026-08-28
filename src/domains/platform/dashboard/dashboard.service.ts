@@ -102,6 +102,20 @@ export class DashboardService {
     );
   }
 
+  /**
+   * Vault-only positions for a wallet — skips the pool-position lookup
+   * (Blend/Aqua catalog + LP balance checks) that `getPositions` also does,
+   * which is unnecessary and much slower for callers that only care about
+   * vault balances (e.g. admin vault-depositor reporting).
+   */
+  getVaultPositions(wallet: string): Promise<DashboardVaultPosition[]> {
+    return this.cache.getOrFetch(
+      `vault-positions:${wallet}`,
+      TTL_POSITIONS_MS,
+      () => this.loadVaultPositions(wallet)
+    );
+  }
+
   getPoolCatalog(): Promise<DashboardPoolCatalogResponse> {
     return this.cache.getOrFetch("pool-catalog", TTL_POOL_CATALOG_MS, () =>
       this.loadPoolCatalog()
