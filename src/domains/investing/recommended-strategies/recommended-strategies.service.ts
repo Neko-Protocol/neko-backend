@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { ErrorCode } from "@neko/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import {
   CreateRecommendedDto,
@@ -90,14 +91,14 @@ export class RecommendedStrategiesService {
     if (!hasKind && !hasId) return { stack_kind: null, stack_id: null };
     if (!hasKind || !hasId) {
       throw new BadRequestException({
-        code: "INVALID_STACK",
+        code: ErrorCode.INVALID_STACK,
         message: "stack_kind and stack_id must both be set or both empty",
       });
     }
 
     const kindRaw = String(b.stack_kind).trim();
     if (!isDestinationKind(kindRaw)) {
-      throw new BadRequestException({ code: "INVALID_STACK_KIND" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_STACK_KIND });
     }
     return { stack_kind: kindRaw, stack_id: String(b.stack_id).trim() };
   }
@@ -204,15 +205,19 @@ export class RecommendedStrategiesService {
     const destination_id =
       typeof body.destination_id === "string" ? body.destination_id.trim() : "";
 
-    if (!name) throw new BadRequestException({ code: "NAME_REQUIRED" });
+    if (!name) throw new BadRequestException({ code: ErrorCode.NAME_REQUIRED });
     if (!token_code) {
-      throw new BadRequestException({ code: "TOKEN_CODE_REQUIRED" });
+      throw new BadRequestException({ code: ErrorCode.TOKEN_CODE_REQUIRED });
     }
     if (!isDestinationKind(destinationKindRaw)) {
-      throw new BadRequestException({ code: "INVALID_DESTINATION_KIND" });
+      throw new BadRequestException({
+        code: ErrorCode.INVALID_DESTINATION_KIND,
+      });
     }
     if (!destination_id) {
-      throw new BadRequestException({ code: "DESTINATION_ID_REQUIRED" });
+      throw new BadRequestException({
+        code: ErrorCode.DESTINATION_ID_REQUIRED,
+      });
     }
 
     const descriptionRaw =
@@ -250,7 +255,7 @@ export class RecommendedStrategiesService {
         : null;
     if (!strategy) {
       throw new BadRequestException({
-        code: "RECOMMENDED_CREATE_FAILED",
+        code: ErrorCode.RECOMMENDED_CREATE_FAILED,
         message: error?.message,
       });
     }
@@ -276,7 +281,9 @@ export class RecommendedStrategiesService {
     }
     if (typeof body.destination_kind === "string") {
       if (!isDestinationKind(body.destination_kind)) {
-        throw new BadRequestException({ code: "INVALID_DESTINATION_KIND" });
+        throw new BadRequestException({
+          code: ErrorCode.INVALID_DESTINATION_KIND,
+        });
       }
       patch.destination_kind = body.destination_kind;
     }
@@ -301,13 +308,15 @@ export class RecommendedStrategiesService {
         patch.stack_id = null;
       } else if (kindEmpty || idEmpty) {
         throw new BadRequestException({
-          code: "INVALID_STACK",
+          code: ErrorCode.INVALID_STACK,
           message: "stack_kind and stack_id must both be set or both empty",
         });
       } else {
         const kindRaw = String(body.stack_kind).trim();
         if (!isDestinationKind(kindRaw)) {
-          throw new BadRequestException({ code: "INVALID_STACK_KIND" });
+          throw new BadRequestException({
+            code: ErrorCode.INVALID_STACK_KIND,
+          });
         }
         patch.stack_kind = kindRaw;
         patch.stack_id = String(body.stack_id).trim();

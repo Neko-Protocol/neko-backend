@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
+import { ErrorCode } from "@neko/api-contracts";
 import { decodeSorobanError } from "@shared/stellar/errors/soroban-error.decoder";
 import { SorobanContractException } from "@shared/stellar/errors/soroban-contract.exception";
 
@@ -37,15 +38,15 @@ export class SorobanErrorMapper {
 
   private statusFor(code: string): HttpStatus {
     switch (code) {
-      case "BAD_SEQUENCE":
-      case "SOURCE_ACCOUNT_NOT_FOUND":
-      case "INSUFFICIENT_FEE":
-      case "INSUFFICIENT_BALANCE":
-      case "AUTH_FAILED":
+      case ErrorCode.BAD_SEQUENCE:
+      case ErrorCode.SOURCE_ACCOUNT_NOT_FOUND:
+      case ErrorCode.INSUFFICIENT_FEE:
+      case ErrorCode.INSUFFICIENT_BALANCE:
+      case ErrorCode.AUTH_FAILED:
         return HttpStatus.UNPROCESSABLE_ENTITY;
-      case "SOROBAN_CONTRACT_ERROR":
+      case ErrorCode.SOROBAN_CONTRACT_ERROR:
         return HttpStatus.UNPROCESSABLE_ENTITY;
-      case "HOST_OBJECT_MISSING":
+      case ErrorCode.HOST_OBJECT_MISSING:
         return HttpStatus.UNPROCESSABLE_ENTITY;
       default:
         return HttpStatus.UNPROCESSABLE_ENTITY;

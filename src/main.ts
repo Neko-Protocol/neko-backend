@@ -1,11 +1,16 @@
 import WebSocket from "ws";
-import { ValidationPipe, VersioningType } from "@nestjs/common";
+import {
+  BadRequestException,
+  ValidationPipe,
+  VersioningType,
+} from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import compression from "compression";
 import helmet from "helmet";
 import { Logger } from "nestjs-pino";
+import { ErrorCode } from "@neko/api-contracts";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { AppModule } from "./app.module";
 
@@ -89,6 +94,23 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
+      // Nest's default exceptionFactory throws a BadRequestException whose
+      // getResponse().message is a string[], which AllExceptionsFilter can't
+      // read (it only reads a string `message`) — field-level errors were
+      // silently dropped. Synthesize a {code, message, details} body instead
+      // so validation failures survive the filter with a stable code the
+      // frontend can translate.
+      exceptionFactory: (errors) => {
+        const details = errors.map((e) => ({
+          field: e.property,
+          constraints: e.constraints ? Object.values(e.constraints) : [],
+        }));
+        return new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: "Validation failed",
+          details,
+        });
+      },
     })
   );
   app.useGlobalFilters(new AllExceptionsFilter());

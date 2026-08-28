@@ -1,5 +1,5 @@
 import { BadGatewayException, Injectable } from "@nestjs/common";
-import type { EtherfuseYieldEntry } from "@neko/api-contracts";
+import { ErrorCode, type EtherfuseYieldEntry } from "@neko/api-contracts";
 import {
   BOND_YIELDS_CACHE_TTL_MS,
   EtherfuseBondYieldsError,
@@ -32,7 +32,7 @@ export class EtherfuseService {
           ? err.message
           : "Etherfuse bond yields unavailable";
       throw new BadGatewayException({
-        code: "ETHERFUSE_BOND_YIELDS_UNAVAILABLE",
+        code: ErrorCode.ETHERFUSE_BOND_YIELDS_UNAVAILABLE,
         message,
       });
     }

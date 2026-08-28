@@ -13,7 +13,6 @@ import { ChainModule } from "./domains/chain/chain.module";
 import { MarketDataModule } from "./domains/market-data/market-data.module";
 import { InvestingModule } from "./domains/investing/investing.module";
 import { PlatformModule } from "./domains/platform/platform.module";
-import { AdminModule } from "./domains/admin/admin.module";
 
 @Module({
   imports: [
@@ -58,7 +57,6 @@ import { AdminModule } from "./domains/admin/admin.module";
     MarketDataModule,
     InvestingModule,
     PlatformModule,
-    AdminModule,
   ],
   providers: [
     {

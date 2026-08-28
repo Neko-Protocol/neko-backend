@@ -24,7 +24,9 @@ export class AssetPricesController {
     short: { limit: 10, ttl: 1_000 },
     default: { limit: 30, ttl: 60_000 },
   })
-  @ApiOperation({ summary: "Price history for an asset symbol (last 7 days)." })
+  @ApiOperation({
+    summary: "Hourly price history for an asset symbol (last 30 days).",
+  })
   async getHistory(@Param() params: SymbolParamDto) {
     return { data: await this.svc.getHistory(params.symbol) };
   }

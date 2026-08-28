@@ -5,6 +5,7 @@ import {
   ApiTooManyRequestsResponse,
 } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
+import { ErrorCode } from "@neko/api-contracts";
 import { ReferralsService } from "./referrals.service";
 
 @ApiTags("referrals")
@@ -16,7 +17,7 @@ export class ReferralsController {
   private requireWallet(wallet?: string): string {
     const trimmed = (wallet ?? "").trim();
     if (!trimmed) {
-      throw new BadRequestException({ code: "WALLET_REQUIRED" });
+      throw new BadRequestException({ code: ErrorCode.WALLET_REQUIRED });
     }
     return trimmed;
   }

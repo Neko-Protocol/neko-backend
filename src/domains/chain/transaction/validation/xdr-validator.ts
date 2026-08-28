@@ -11,6 +11,7 @@ import {
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
+import { ErrorCode } from "@neko/api-contracts";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import {
   getContractLabel,
@@ -45,12 +46,14 @@ export class XdrValidator {
     try {
       tx = TransactionBuilder.fromXDR(rawXdr, passphrase);
     } catch (err) {
-      throw new BadRequestException({ code: "INVALID_XDR" });
+      throw new BadRequestException({ code: ErrorCode.INVALID_XDR });
     }
 
     if (tx instanceof FeeBumpTransaction) {
       // Fee-bump TXs are not allowed through the relay.
-      throw new UnprocessableEntityException({ code: "DISALLOWED_OPERATION" });
+      throw new UnprocessableEntityException({
+        code: ErrorCode.DISALLOWED_OPERATION,
+      });
     }
 
     const ops: ValidatedOp[] = [];
@@ -83,7 +86,7 @@ export class XdrValidator {
       };
     }
     throw new UnprocessableEntityException({
-      code: "DISALLOWED_OPERATION",
+      code: ErrorCode.DISALLOWED_OPERATION,
       ...(isProd() ? {} : { details: { opType: op.type } }),
     });
   }
@@ -92,7 +95,7 @@ export class XdrValidator {
     const func = op.func;
     if (func.switch().name !== "hostFunctionTypeInvokeContract") {
       throw new UnprocessableEntityException({
-        code: "DISALLOWED_OPERATION",
+        code: ErrorCode.DISALLOWED_OPERATION,
         ...(isProd()
           ? {}
           : { details: { hostFunctionType: func.switch().name } }),
@@ -111,8 +114,8 @@ export class XdrValidator {
       });
       throw new UnprocessableEntityException(
         isProd()
-          ? { code: "PREPARE_REJECTED" }
-          : { code: "DISALLOWED_CONTRACT", details: { contractId } }
+          ? { code: ErrorCode.PREPARE_REJECTED }
+          : { code: ErrorCode.DISALLOWED_CONTRACT, details: { contractId } }
       );
     }
 
@@ -123,8 +126,11 @@ export class XdrValidator {
     if (!isAllowedFunction(fnName)) {
       throw new UnprocessableEntityException(
         isProd()
-          ? { code: "PREPARE_REJECTED" }
-          : { code: "DISALLOWED_OPERATION", details: { fnName, contractId } }
+          ? { code: ErrorCode.PREPARE_REJECTED }
+          : {
+              code: ErrorCode.DISALLOWED_OPERATION,
+              details: { fnName, contractId },
+            }
       );
     }
 
