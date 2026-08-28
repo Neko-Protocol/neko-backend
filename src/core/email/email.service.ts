@@ -6,6 +6,8 @@ export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
+  /** Plain-text alternative. Improves deliverability (fewer spam-filter hits) for HTML-only sends. */
+  text?: string;
 }
 
 export interface TemplateEmailMessage {
@@ -48,6 +50,7 @@ export class EmailService {
         to: [message.to],
         subject: message.subject,
         html: message.html,
+        ...(message.text ? { text: message.text } : {}),
       });
     } catch (err) {
       this.logger.warn(`email send failed: ${String(err)}`);

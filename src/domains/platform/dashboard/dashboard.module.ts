@@ -8,5 +8,6 @@ import { DashboardCache } from "./cache/dashboard-cache";
   imports: [AssetPricesModule],
   controllers: [DashboardController],
   providers: [DashboardService, DashboardCache],
+  exports: [DashboardService],
 })
 export class DashboardModule {}
