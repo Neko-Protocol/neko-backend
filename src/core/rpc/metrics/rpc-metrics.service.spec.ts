@@ -1,25 +1,26 @@
+import { MetricsRegistryService } from "../../observability/metrics/metrics-registry.service";
 import { RpcMetricsService } from "./rpc-metrics.service";
 
-async function seriesFor(
-  metrics: RpcMetricsService,
-  name: string
-): Promise<string[]> {
-  const text = await metrics.metrics();
-  return text.split("\n").filter((line) => line.startsWith(name));
+let registry: MetricsRegistryService;
+
+async function seriesFor(name: string): Promise<string[]> {
+  const text = await registry.metrics();
+  return text.split("\n").filter((line: string) => line.startsWith(name));
 }
 
 describe("RpcMetricsService", () => {
   let metrics: RpcMetricsService;
 
   beforeEach(() => {
-    metrics = new RpcMetricsService();
+    registry = new MetricsRegistryService();
+    metrics = new RpcMetricsService(registry);
   });
 
   describe("requests", () => {
     it("labels a call by method, endpoint and outcome", async () => {
       metrics.observeRequest("simulateTransaction", "quasar", "ok", 120);
 
-      const [line] = await seriesFor(metrics, "neko_rpc_requests_total{");
+      const [line] = await seriesFor("neko_rpc_requests_total{");
 
       expect(line).toContain('method="simulateTransaction"');
       expect(line).toContain('endpoint="quasar"');
@@ -31,7 +32,7 @@ describe("RpcMetricsService", () => {
       metrics.observeRequest("getNetwork", "quasar", "ok", 10);
       metrics.observeRequest("getNetwork", "quasar", "error", 10);
 
-      const lines = await seriesFor(metrics, "neko_rpc_requests_total{");
+      const lines = await seriesFor("neko_rpc_requests_total{");
 
       expect(lines).toHaveLength(2);
     });
@@ -41,7 +42,7 @@ describe("RpcMetricsService", () => {
       // upstream latency when it actually avoided the call.
       metrics.observeRequest("simulateTransaction", "quasar", "cached", 3);
 
-      const [line] = await seriesFor(metrics, "neko_rpc_requests_total{");
+      const [line] = await seriesFor("neko_rpc_requests_total{");
 
       expect(line).toContain('outcome="cached"');
     });
@@ -49,7 +50,7 @@ describe("RpcMetricsService", () => {
     it("records duration in seconds, not milliseconds", async () => {
       metrics.observeRequest("getNetwork", "quasar", "ok", 250);
 
-      const text = await metrics.metrics();
+      const text = await registry.metrics();
       const sum = text
         .split("\n")
         .find((l) => l.startsWith("neko_rpc_request_duration_seconds_sum"));
@@ -62,7 +63,7 @@ describe("RpcMetricsService", () => {
     it("records the pair of endpoints and the reason", async () => {
       metrics.observeFailover("validation_cloud", "onfinality", "timeout");
 
-      const [line] = await seriesFor(metrics, "neko_rpc_failover_total{");
+      const [line] = await seriesFor("neko_rpc_failover_total{");
 
       expect(line).toContain('from="validation_cloud"');
       expect(line).toContain('to="onfinality"');
@@ -76,7 +77,7 @@ describe("RpcMetricsService", () => {
       metrics.observeCache("simulateTransaction", "hit");
       metrics.observeCache("simulateTransaction", "miss");
 
-      const lines = await seriesFor(metrics, "neko_rpc_cache_total{");
+      const lines = await seriesFor("neko_rpc_cache_total{");
       const hit = lines.find((l) => l.includes('result="hit"'));
       const miss = lines.find((l) => l.includes('result="miss"'));
 
@@ -89,7 +90,7 @@ describe("RpcMetricsService", () => {
     it("reports a healthy endpoint as up", async () => {
       metrics.observeEndpointState("quasar", "up", 0);
 
-      const [line] = await seriesFor(metrics, "neko_rpc_endpoint_up{");
+      const [line] = await seriesFor("neko_rpc_endpoint_up{");
 
       expect(line).toContain('state="up"');
       expect(line).toMatch(/ 1$/);
@@ -98,7 +99,7 @@ describe("RpcMetricsService", () => {
     it("still reports a degraded endpoint as up — it is last in line, not out", async () => {
       metrics.observeEndpointState("gateway_fm", "degraded", 12);
 
-      const [line] = await seriesFor(metrics, "neko_rpc_endpoint_up{");
+      const [line] = await seriesFor("neko_rpc_endpoint_up{");
 
       expect(line).toContain('state="degraded"');
       expect(line).toMatch(/ 1$/);
@@ -107,7 +108,7 @@ describe("RpcMetricsService", () => {
     it("reports a downed endpoint as zero", async () => {
       metrics.observeEndpointState("gateway_fm", "down", null);
 
-      const [line] = await seriesFor(metrics, "neko_rpc_endpoint_up{");
+      const [line] = await seriesFor("neko_rpc_endpoint_up{");
 
       expect(line).toMatch(/ 0$/);
     });
@@ -115,7 +116,7 @@ describe("RpcMetricsService", () => {
     it("publishes ledger lag when known", async () => {
       metrics.observeEndpointState("gateway_fm", "degraded", 12);
 
-      const [line] = await seriesFor(metrics, "neko_rpc_endpoint_ledger_lag{");
+      const [line] = await seriesFor("neko_rpc_endpoint_ledger_lag{");
 
       expect(line).toMatch(/ 12$/);
     });
@@ -123,7 +124,7 @@ describe("RpcMetricsService", () => {
     it("leaves lag unset rather than reporting a misleading zero", async () => {
       metrics.observeEndpointState("gateway_fm", "down", null);
 
-      const lines = await seriesFor(metrics, "neko_rpc_endpoint_ledger_lag{");
+      const lines = await seriesFor("neko_rpc_endpoint_ledger_lag{");
 
       expect(lines).toHaveLength(0);
     });
@@ -134,7 +135,7 @@ describe("RpcMetricsService", () => {
       metrics.observeTxSubmission("PENDING");
       metrics.observeTxSubmission("DUPLICATE");
 
-      const lines = await seriesFor(metrics, "neko_tx_submissions_total{");
+      const lines = await seriesFor("neko_tx_submissions_total{");
 
       expect(lines).toHaveLength(2);
       expect(lines.join()).toContain('outcome="DUPLICATE"');
@@ -143,13 +144,13 @@ describe("RpcMetricsService", () => {
 
   describe("exposition", () => {
     it("serves the Prometheus text content type", () => {
-      expect(metrics.contentType()).toContain("text/plain");
+      expect(registry.contentType()).toContain("text/plain");
     });
 
     it("tags every series with the service name", async () => {
       metrics.observeRequest("getNetwork", "quasar", "ok", 1);
 
-      const [line] = await seriesFor(metrics, "neko_rpc_requests_total{");
+      const [line] = await seriesFor("neko_rpc_requests_total{");
 
       expect(line).toContain('service="neko-backend"');
     });
@@ -157,10 +158,10 @@ describe("RpcMetricsService", () => {
     it("exposes only our own series, keeping cardinality predictable", async () => {
       metrics.observeRequest("getNetwork", "quasar", "ok", 1);
 
-      const names = (await metrics.metrics())
+      const names = (await registry.metrics())
         .split("\n")
-        .filter((l) => l.startsWith("# HELP"))
-        .map((l) => l.split(" ")[2]);
+        .filter((l: string) => l.startsWith("# HELP"))
+        .map((l: string) => l.split(" ")[2]);
 
       expect(names.every((n) => n.startsWith("neko_"))).toBe(true);
     });

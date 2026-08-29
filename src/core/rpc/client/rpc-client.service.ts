@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { RpcCacheService } from "./rpc-cache.service";
-import { RpcMetricsService } from "./rpc-metrics.service";
-import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
+import { RpcCacheService } from "../cache/rpc-cache.service";
+import { RpcMetricsService } from "../metrics/rpc-metrics.service";
+import { PoolEndpoint, RpcPoolService } from "../pool/rpc-pool.service";
 
 /**
  * Pure reads. Safe to retry and to fail over across endpoints without limit —

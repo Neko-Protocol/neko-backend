@@ -1,7 +1,8 @@
 import { RpcClientService, RpcPoolExhaustedError } from "./rpc-client.service";
-import { RpcCacheService } from "./rpc-cache.service";
-import { RpcMetricsService } from "./rpc-metrics.service";
-import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
+import { RpcCacheService } from "../cache/rpc-cache.service";
+import { MetricsRegistryService } from "../../observability/metrics/metrics-registry.service";
+import { RpcMetricsService } from "../metrics/rpc-metrics.service";
+import { PoolEndpoint, RpcPoolService } from "../pool/rpc-pool.service";
 
 interface FakeEndpoint extends PoolEndpoint {
   server: PoolEndpoint["server"] & Record<string, jest.Mock>;
@@ -72,7 +73,7 @@ describe("RpcClientService", () => {
         hit: false,
       }),
     } as unknown as RpcCacheService;
-    metrics = new RpcMetricsService();
+    metrics = new RpcMetricsService(new MetricsRegistryService());
     client = new RpcClientService(pool, cache, metrics);
   });
 

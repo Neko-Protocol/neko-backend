@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { RpcMetricsService } from "./rpc-metrics.service";
+import { RpcMetricsService } from "../metrics/rpc-metrics.service";
 import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
 
 export const HEALTH_INTERVAL_MS = 20_000;

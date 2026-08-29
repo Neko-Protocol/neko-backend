@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Horizon, rpc, Transaction } from "@stellar/stellar-sdk";
-import { RpcClientService } from "../rpc/rpc-client.service";
-import { RpcPoolService } from "../rpc/rpc-pool.service";
+import { RpcClientService } from "../rpc/client/rpc-client.service";
+import { RpcPoolService } from "../rpc/pool/rpc-pool.service";
 import {
   loadStellarNetworkConfig,
   StellarNetworkConfig,

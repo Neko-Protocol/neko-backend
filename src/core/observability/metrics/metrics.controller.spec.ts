@@ -1,16 +1,19 @@
 import { ConfigService } from "@nestjs/config";
 import type { Request } from "express";
-import { RpcMetricsController } from "./rpc-metrics.controller";
-import { RpcMetricsService } from "./rpc-metrics.service";
+import { MetricsController } from "./metrics.controller";
+import { RpcMetricsService } from "../../rpc/metrics/rpc-metrics.service";
+import { MetricsRegistryService } from "./metrics-registry.service";
 
 const TOKEN = "a-scrape-token-long-enough-to-pass";
 
 function makeController(token?: string) {
-  const metrics = new RpcMetricsService();
+  const registry = new MetricsRegistryService();
+  // Seed a real collector so the exposition has something to serve.
+  const metrics = new RpcMetricsService(registry);
   const config = {
     get: (key: string) => (key === "METRICS_SCRAPE_TOKEN" ? token : undefined),
   } as unknown as ConfigService;
-  return { controller: new RpcMetricsController(metrics, config), metrics };
+  return { controller: new MetricsController(registry, config), metrics };
 }
 
 function request(authorization?: string): Request {
@@ -19,7 +22,7 @@ function request(authorization?: string): Request {
   } as unknown as Request;
 }
 
-describe("RpcMetricsController", () => {
+describe("MetricsController", () => {
   describe("authorization", () => {
     it("serves the exposition with the right bearer token", async () => {
       const { controller, metrics } = makeController(TOKEN);

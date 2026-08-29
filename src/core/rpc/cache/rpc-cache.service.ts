@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { rpc } from "@stellar/stellar-sdk";
 import { createHash } from "crypto";
-import { RedisCacheService } from "../cache/redis-cache.service";
+import { RedisCacheService } from "../../cache/redis-cache.service";
 
 /**
  * Why caching happens at the raw JSON-RPC layer rather than on the parsed

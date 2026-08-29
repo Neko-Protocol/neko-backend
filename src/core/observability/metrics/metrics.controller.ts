@@ -12,8 +12,8 @@ import { SkipThrottle } from "@nestjs/throttler";
 import { timingSafeEqual } from "crypto";
 import type { Request } from "express";
 import { ErrorCode } from "@neko/api-contracts";
-import { SkipAuth } from "../../common/decorators/skip-auth.decorator";
-import { RpcMetricsService } from "./rpc-metrics.service";
+import { SkipAuth } from "../../../common/decorators/skip-auth.decorator";
+import { MetricsRegistryService } from "./metrics-registry.service";
 
 /**
  * Prometheus scrape endpoint.
@@ -30,9 +30,9 @@ import { RpcMetricsService } from "./rpc-metrics.service";
 @Controller({ path: "metrics", version: VERSION_NEUTRAL })
 @SkipThrottle()
 @SkipAuth()
-export class RpcMetricsController {
+export class MetricsController {
   constructor(
-    private readonly metrics: RpcMetricsService,
+    private readonly registry: MetricsRegistryService,
     private readonly config: ConfigService
   ) {}
 
@@ -40,7 +40,7 @@ export class RpcMetricsController {
   @Header("Cache-Control", "no-store")
   async scrape(@Req() req: Request): Promise<string> {
     this.assertAuthorized(req);
-    return this.metrics.metrics();
+    return this.registry.metrics();
   }
 
   private assertAuthorized(req: Request): void {

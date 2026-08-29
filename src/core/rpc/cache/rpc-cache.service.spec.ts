@@ -1,4 +1,4 @@
-import { RedisCacheService } from "../cache/redis-cache.service";
+import { RedisCacheService } from "../../cache/redis-cache.service";
 import { RpcCacheService } from "./rpc-cache.service";
 
 /**
