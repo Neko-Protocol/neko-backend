@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { RpcCacheService } from "./rpc-cache.service";
 import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
 
 /**
@@ -78,7 +79,10 @@ export class RpcClientService {
   private readonly logger = new Logger(RpcClientService.name);
   private readonly affinity = new Map<string, AffinityEntry>();
 
-  constructor(private readonly pool: RpcPoolService) {}
+  constructor(
+    private readonly pool: RpcPoolService,
+    private readonly cache: RpcCacheService
+  ) {}
 
   /**
    * Invokes `method` on the best available endpoint, failing over on error.
@@ -145,7 +149,43 @@ export class RpcClientService {
     return READ_METHODS.has(method);
   }
 
+  /**
+   * Runs one call against one endpoint, serving it from cache where the method
+   * allows it.
+   *
+   * Raw-cacheable methods go through the SDK's underscore variant, which
+   * returns the unparsed wire response — plain JSON, and therefore safe to
+   * store. The parser then runs on hit and miss alike, so a cached result is
+   * structurally identical to a fresh one. Caching the parsed object instead
+   * would destroy its XDR class instances.
+   */
   private async invoke<T>(
+    endpoint: PoolEndpoint,
+    method: string,
+    args: unknown[]
+  ): Promise<T> {
+    const plan = this.cache.planFor(method);
+
+    if (plan.kind === "none" || !this.cache.isEnabled()) {
+      return this.callServer<T>(endpoint, method, args);
+    }
+
+    const key = this.cache.buildKey(method, args);
+
+    if (plan.kind === "plain") {
+      const { value } = await this.cache.through(key, plan.ttlMs, () =>
+        this.callServer<T>(endpoint, method, args)
+      );
+      return value;
+    }
+
+    const { value: raw } = await this.cache.through(key, plan.ttlMs, () =>
+      this.callServer<unknown>(endpoint, plan.rawMethod, args)
+    );
+    return plan.parse(raw as never) as T;
+  }
+
+  private async callServer<T>(
     endpoint: PoolEndpoint,
     method: string,
     args: unknown[]

@@ -1,4 +1,5 @@
 import { RpcClientService, RpcPoolExhaustedError } from "./rpc-client.service";
+import { RpcCacheService } from "./rpc-cache.service";
 import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
 
 interface FakeEndpoint extends PoolEndpoint {
@@ -44,6 +45,7 @@ describe("RpcClientService", () => {
   let charlie: FakeEndpoint;
   let client: RpcClientService;
   let pool: RpcPoolService;
+  let cache: RpcCacheService;
 
   beforeEach(() => {
     // Full-jitter backoff with random()=0 collapses every sleep to 0ms.
@@ -53,7 +55,22 @@ describe("RpcClientService", () => {
     bravo = makeEndpoint("bravo", 1);
     charlie = makeEndpoint("charlie", 2);
     pool = makePool([alpha, bravo, charlie]);
-    client = new RpcClientService(pool);
+    // Caching disabled: these tests cover routing, not the cache. The
+    // cache has its own suite.
+    cache = {
+      planFor: () => ({ kind: "none", reason: "disabled in test" }),
+      isEnabled: () => false,
+      buildKey: () => "unused",
+      through: async (
+        _k: string,
+        _t: number,
+        exec: () => Promise<unknown>
+      ) => ({
+        value: await exec(),
+        hit: false,
+      }),
+    } as unknown as RpcCacheService;
+    client = new RpcClientService(pool, cache);
   });
 
   afterEach(() => {

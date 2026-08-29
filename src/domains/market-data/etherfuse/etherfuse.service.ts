@@ -1,4 +1,5 @@
 import { BadGatewayException, Injectable } from "@nestjs/common";
+import { RedisCacheService } from "../../../core/cache/redis-cache.service";
 import { ErrorCode, type EtherfuseYieldEntry } from "@neko/api-contracts";
 import {
   BOND_YIELDS_CACHE_TTL_MS,
@@ -9,23 +10,16 @@ import {
 
 @Injectable()
 export class EtherfuseService {
-  private cache: { expiresAt: number; value: EtherfuseYieldEntry[] } | null =
-    null;
+  constructor(private readonly cache: RedisCacheService) {}
 
   async getBondYields(): Promise<EtherfuseYieldEntry[]> {
-    const now = Date.now();
-    if (this.cache && this.cache.expiresAt > now) {
-      return this.cache.value;
-    }
-
     try {
-      const body = await fetchBondsCost();
-      const entries = mapBondCostPayload(body);
-      this.cache = {
-        value: entries,
-        expiresAt: now + BOND_YIELDS_CACHE_TTL_MS,
-      };
-      return entries;
+      const { value } = await this.cache.through(
+        "etherfuse:bond-yields",
+        BOND_YIELDS_CACHE_TTL_MS,
+        async () => mapBondCostPayload(await fetchBondsCost())
+      );
+      return value;
     } catch (err) {
       const message =
         err instanceof EtherfuseBondYieldsError

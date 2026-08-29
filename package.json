@@ -37,6 +37,7 @@
     "class-validator": "^0.14.2",
     "compression": "^1.8.1",
     "helmet": "^8.2.0",
+    "ioredis": "^6.0.0",
     "joi": "^18.2.1",
     "nestjs-pino": "^4.6.1",
     "otpauth": "^9.3.6",
