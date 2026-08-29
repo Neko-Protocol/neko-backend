@@ -4,7 +4,7 @@ import {
   HealthIndicatorResult,
   HealthCheckError,
 } from "@nestjs/terminus";
-import { RpcPoolService } from "../../rpc/rpc-pool.service";
+import { RpcPoolService } from "../../rpc/pool/rpc-pool.service";
 
 @Injectable()
 export class SorobanRpcHealthIndicator extends HealthIndicator {

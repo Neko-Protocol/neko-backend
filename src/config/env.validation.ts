@@ -26,6 +26,17 @@ export const envValidationSchema = Joi.object({
     .required(),
   STELLAR_RPC_AUTH_HEADER: Joi.string().optional().allow(""),
 
+  // Optional. Unset means RPC response caching is disabled and every call
+  // goes upstream — the app boots and behaves correctly either way.
+  REDIS_URL: Joi.string()
+    .uri({ scheme: ["redis", "rediss"] })
+    .optional()
+    .allow(""),
+
+  // Bearer token Grafana (or any scraper) must present on GET /metrics.
+  // Unset disables the endpoint entirely rather than opening it.
+  METRICS_SCRAPE_TOKEN: Joi.string().min(24).optional().allow(""),
+
   SUPABASE_URL: Joi.string().uri().required(),
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().min(1).required(),
   SUPABASE_ANON_KEY: Joi.string().min(1).required(),

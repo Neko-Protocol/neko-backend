@@ -1,5 +1,8 @@
 import { RpcClientService, RpcPoolExhaustedError } from "./rpc-client.service";
-import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
+import { RpcCacheService } from "../cache/rpc-cache.service";
+import { MetricsRegistryService } from "../../observability/metrics/metrics-registry.service";
+import { RpcMetricsService } from "../metrics/rpc-metrics.service";
+import { PoolEndpoint, RpcPoolService } from "../pool/rpc-pool.service";
 
 interface FakeEndpoint extends PoolEndpoint {
   server: PoolEndpoint["server"] & Record<string, jest.Mock>;
@@ -44,6 +47,8 @@ describe("RpcClientService", () => {
   let charlie: FakeEndpoint;
   let client: RpcClientService;
   let pool: RpcPoolService;
+  let cache: RpcCacheService;
+  let metrics: RpcMetricsService;
 
   beforeEach(() => {
     // Full-jitter backoff with random()=0 collapses every sleep to 0ms.
@@ -53,7 +58,23 @@ describe("RpcClientService", () => {
     bravo = makeEndpoint("bravo", 1);
     charlie = makeEndpoint("charlie", 2);
     pool = makePool([alpha, bravo, charlie]);
-    client = new RpcClientService(pool);
+    // Caching disabled: these tests cover routing, not the cache. The
+    // cache has its own suite.
+    cache = {
+      planFor: () => ({ kind: "none", reason: "disabled in test" }),
+      isEnabled: () => false,
+      buildKey: () => "unused",
+      through: async (
+        _k: string,
+        _t: number,
+        exec: () => Promise<unknown>
+      ) => ({
+        value: await exec(),
+        hit: false,
+      }),
+    } as unknown as RpcCacheService;
+    metrics = new RpcMetricsService(new MetricsRegistryService());
+    client = new RpcClientService(pool, cache, metrics);
   });
 
   afterEach(() => {

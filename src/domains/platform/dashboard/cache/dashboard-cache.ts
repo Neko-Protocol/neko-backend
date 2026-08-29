@@ -1,40 +1,26 @@
 import { Injectable } from "@nestjs/common";
+import { RedisCacheService } from "../../../../core/cache/redis-cache.service";
 
-interface Entry<T> {
-  data: T;
-  expiresAt: number;
-}
-
+/**
+ * Dashboard read cache.
+ *
+ * Backed by Redis so entries survive redeploys and are shared across backend
+ * instances — previously every replica warmed its own copy and every deploy
+ * threw it away. When Redis is unavailable it transparently falls back to a
+ * per-process map, so the dashboard works with or without it.
+ */
 @Injectable()
 export class DashboardCache {
-  private readonly store = new Map<string, Entry<unknown>>();
+  private readonly local = new Map<
+    string,
+    { data: unknown; expiresAt: number }
+  >();
   private readonly inflight = new Map<string, Promise<unknown>>();
 
-  get<T>(key: string): T | undefined {
-    const entry = this.store.get(key);
-    if (!entry) return undefined;
-    if (entry.expiresAt <= Date.now()) {
-      this.store.delete(key);
-      return undefined;
-    }
-    return entry.data as T;
-  }
+  constructor(private readonly store: RedisCacheService) {}
 
-  set<T>(key: string, data: T, ttlMs: number): void {
-    this.store.set(key, { data, expiresAt: Date.now() + ttlMs });
-  }
-
-  invalidate(key: string): void {
-    this.store.delete(key);
-  }
-
-  clear(): void {
-    this.store.clear();
-    this.inflight.clear();
-  }
-
-  size(): number {
-    return this.store.size;
+  private key(key: string): string {
+    return `dashboard:${key}`;
   }
 
   async getOrFetch<T>(
@@ -42,8 +28,36 @@ export class DashboardCache {
     ttlMs: number,
     fetch: () => Promise<T>
   ): Promise<T> {
-    const cached = this.get<T>(key);
-    if (cached !== undefined) return cached;
+    if (this.store.isEnabled()) {
+      const { value } = await this.store.through(this.key(key), ttlMs, fetch);
+      return value;
+    }
+    return this.localGetOrFetch(key, ttlMs, fetch);
+  }
+
+  async invalidate(key: string): Promise<void> {
+    this.local.delete(key);
+    await this.store.invalidate(this.key(key));
+  }
+
+  /** Local-only; used by tests and by the fallback path. */
+  clear(): void {
+    this.local.clear();
+    this.inflight.clear();
+  }
+
+  size(): number {
+    return this.local.size;
+  }
+
+  private async localGetOrFetch<T>(
+    key: string,
+    ttlMs: number,
+    fetch: () => Promise<T>
+  ): Promise<T> {
+    const entry = this.local.get(key);
+    if (entry && entry.expiresAt > Date.now()) return entry.data as T;
+    if (entry) this.local.delete(key);
 
     const existing = this.inflight.get(key);
     if (existing) return existing as Promise<T>;
@@ -51,7 +65,7 @@ export class DashboardCache {
     const promise = (async () => {
       try {
         const data = await fetch();
-        this.set(key, data, ttlMs);
+        this.local.set(key, { data, expiresAt: Date.now() + ttlMs });
         return data;
       } finally {
         this.inflight.delete(key);

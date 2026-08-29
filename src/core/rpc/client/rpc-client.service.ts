@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
+import { RpcCacheService } from "../cache/rpc-cache.service";
+import { RpcMetricsService } from "../metrics/rpc-metrics.service";
+import { PoolEndpoint, RpcPoolService } from "../pool/rpc-pool.service";
 
 /**
  * Pure reads. Safe to retry and to fail over across endpoints without limit —
@@ -78,7 +80,11 @@ export class RpcClientService {
   private readonly logger = new Logger(RpcClientService.name);
   private readonly affinity = new Map<string, AffinityEntry>();
 
-  constructor(private readonly pool: RpcPoolService) {}
+  constructor(
+    private readonly pool: RpcPoolService,
+    private readonly cache: RpcCacheService,
+    private readonly metrics: RpcMetricsService
+  ) {}
 
   /**
    * Invokes `method` on the best available endpoint, failing over on error.
@@ -97,8 +103,27 @@ export class RpcClientService {
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       const endpoint = candidates[attempt % candidates.length];
 
+      const startedAt = Date.now();
+
       try {
-        const result = await this.invoke<T>(endpoint, method, args);
+        const { value: result, cached } = await this.invoke<T>(
+          endpoint,
+          method,
+          args
+        );
+        this.metrics.observeRequest(
+          method,
+          endpoint.config.label,
+          cached ? "cached" : "ok",
+          Date.now() - startedAt
+        );
+
+        if (method === "sendTransaction") {
+          const status = (result as { status?: unknown } | null)?.status;
+          this.metrics.observeTxSubmission(
+            typeof status === "string" ? status : "unknown"
+          );
+        }
 
         // TRY_AGAIN_LATER means this node is congested, not that the tx is bad.
         // Resubmitting the identical XDR elsewhere is safe.
@@ -118,6 +143,12 @@ export class RpcClientService {
         return result;
       } catch (err) {
         lastError = err;
+        this.metrics.observeRequest(
+          method,
+          endpoint.config.label,
+          "error",
+          Date.now() - startedAt
+        );
         this.pool.recordFailure(endpoint, err);
         this.logger.warn(
           `RPC ${method} failed on ${endpoint.config.label} (attempt ${
@@ -128,6 +159,11 @@ export class RpcClientService {
         if (attempt < attempts - 1) {
           const next = candidates[(attempt + 1) % candidates.length];
           if (next.config.label !== endpoint.config.label) {
+            this.metrics.observeFailover(
+              endpoint.config.label,
+              next.config.label,
+              classifyFailure(err)
+            );
             this.logger.log(
               `RPC failover ${endpoint.config.label} -> ${next.config.label} for ${method}`
             );
@@ -145,7 +181,48 @@ export class RpcClientService {
     return READ_METHODS.has(method);
   }
 
+  /**
+   * Runs one call against one endpoint, serving it from cache where the method
+   * allows it.
+   *
+   * Raw-cacheable methods go through the SDK's underscore variant, which
+   * returns the unparsed wire response — plain JSON, and therefore safe to
+   * store. The parser then runs on hit and miss alike, so a cached result is
+   * structurally identical to a fresh one. Caching the parsed object instead
+   * would destroy its XDR class instances.
+   */
   private async invoke<T>(
+    endpoint: PoolEndpoint,
+    method: string,
+    args: unknown[]
+  ): Promise<{ value: T; cached: boolean }> {
+    const plan = this.cache.planFor(method);
+
+    if (plan.kind === "none" || !this.cache.isEnabled()) {
+      return {
+        value: await this.callServer<T>(endpoint, method, args),
+        cached: false,
+      };
+    }
+
+    const key = this.cache.buildKey(method, args);
+
+    if (plan.kind === "plain") {
+      const { value, hit } = await this.cache.through(key, plan.ttlMs, () =>
+        this.callServer<T>(endpoint, method, args)
+      );
+      this.metrics.observeCache(method, hit ? "hit" : "miss");
+      return { value, cached: hit };
+    }
+
+    const { value: raw, hit } = await this.cache.through(key, plan.ttlMs, () =>
+      this.callServer<unknown>(endpoint, plan.rawMethod, args)
+    );
+    this.metrics.observeCache(method, hit ? "hit" : "miss");
+    return { value: plan.parse(raw as never) as T, cached: hit };
+  }
+
+  private async callServer<T>(
     endpoint: PoolEndpoint,
     method: string,
     args: unknown[]
@@ -229,6 +306,19 @@ export class RpcClientService {
       }
     }
   }
+}
+
+/** Coarse failure reason, kept low-cardinality so it is safe as a label. */
+function classifyFailure(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message)) return "dns";
+  if (/ECONNREFUSED|ECONNRESET|EPIPE/i.test(message)) return "connection";
+  if (/timed? ?out|ETIMEDOUT/i.test(message)) return "timeout";
+  if (/\b429\b|too many requests|rate limit/i.test(message))
+    return "rate_limited";
+  if (/\b5\d\d\b/.test(message)) return "upstream_5xx";
+  if (/TRY_AGAIN_LATER/.test(message)) return "try_again_later";
+  return "other";
 }
 
 function isTryAgainLater(result: unknown): boolean {

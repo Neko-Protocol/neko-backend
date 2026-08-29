@@ -1,7 +1,10 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { rpc } from "@stellar/stellar-sdk";
-import { loadRpcEndpoints, RpcEndpointConfig } from "./rpc-endpoint.config";
+import {
+  loadRpcEndpoints,
+  RpcEndpointConfig,
+} from "../config/rpc-endpoint.config";
 
 /**
  * up       — healthy and current.
