@@ -13,9 +13,14 @@ export const envValidationSchema = Joi.object({
     .pattern(/^(mainnet|testnet|public|pubnet|local)$/i)
     .required(),
   STELLAR_NETWORK_PASSPHRASE: Joi.string().min(1).required(),
+  // Legacy single-endpoint config. Still honoured as a fallback when
+  // STELLAR_RPC_ENDPOINTS is unset, so existing deployments keep booting.
   STELLAR_RPC_URL: Joi.string()
     .uri({ scheme: ["http", "https"] })
     .required(),
+  // JSON array of { url, label?, priority?, authHeader? }, highest priority
+  // first. Takes precedence over STELLAR_RPC_URL when present.
+  STELLAR_RPC_ENDPOINTS: Joi.string().optional().allow(""),
   STELLAR_HORIZON_URL: Joi.string()
     .uri({ scheme: ["http", "https"] })
     .required(),
