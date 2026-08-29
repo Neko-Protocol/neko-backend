@@ -8,6 +8,12 @@ import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
 
 const CONNECT_TIMEOUT_MS = 3_000;
+/**
+ * How long to wait before warning that a configured Redis never came up. A
+ * cache that silently never connects is worse than no cache: the app looks
+ * healthy while every read goes upstream.
+ */
+const FIRST_CONNECT_GRACE_MS = 10_000;
 /** A cache operation slower than this is not worth waiting for. */
 const OP_TIMEOUT_MS = 250;
 
@@ -31,6 +37,8 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
   private client: Redis | null = null;
   private connected = false;
   private readonly inflight = new Map<string, Promise<unknown>>();
+  private everConnected = false;
+  private firstConnectTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -53,8 +61,27 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
 
     this.client.on("ready", () => {
       this.connected = true;
+      this.everConnected = true;
+      if (this.firstConnectTimer) {
+        clearTimeout(this.firstConnectTimer);
+        this.firstConnectTimer = null;
+      }
       this.logger.log("Shared cache connected to Redis.");
     });
+
+    // REDIS_URL was set, so caching was meant to be on. If it never comes up,
+    // say so loudly once rather than degrading in silence.
+    this.firstConnectTimer = setTimeout(() => {
+      if (!this.everConnected) {
+        this.logger.error(
+          `REDIS_URL is configured but Redis has not connected after ${
+            FIRST_CONNECT_GRACE_MS / 1000
+          }s — running with no shared cache. Check the URL and that the service is reachable from this network.`
+        );
+      }
+    }, FIRST_CONNECT_GRACE_MS);
+    // Never hold the process open just for this warning.
+    this.firstConnectTimer.unref?.();
     this.client.on("end", () => {
       this.connected = false;
     });
@@ -70,6 +97,7 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.firstConnectTimer) clearTimeout(this.firstConnectTimer);
     if (!this.client) return;
     try {
       await this.client.quit();

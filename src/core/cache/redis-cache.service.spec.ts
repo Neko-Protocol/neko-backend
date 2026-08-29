@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { RedisCacheService } from "./redis-cache.service";
 
@@ -71,6 +72,27 @@ describe("RedisCacheService", () => {
       await expect(
         store.through("k", 1_000, async () => "ok")
       ).resolves.toMatchObject({ value: "ok" });
+    });
+
+    it("warns loudly when a configured Redis never connects", async () => {
+      // Silent degradation is the failure mode this guards against: the app
+      // looks healthy while every read goes upstream.
+      jest.useFakeTimers({ doNotFake: ["nextTick"] });
+      const other = makeStore("redis://127.0.0.1:1");
+      const spy = jest
+        .spyOn(Logger.prototype, "error")
+        .mockImplementation(() => undefined);
+
+      other.onModuleInit();
+      jest.advanceTimersByTime(10_000);
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining("REDIS_URL is configured")
+      );
+
+      spy.mockRestore();
+      jest.useRealTimers();
+      await other.onModuleDestroy();
     });
 
     it("propagates the fetcher's own error unchanged", async () => {
