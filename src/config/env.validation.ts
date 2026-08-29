@@ -33,6 +33,10 @@ export const envValidationSchema = Joi.object({
     .optional()
     .allow(""),
 
+  // Bearer token Grafana (or any scraper) must present on GET /metrics.
+  // Unset disables the endpoint entirely rather than opening it.
+  METRICS_SCRAPE_TOKEN: Joi.string().min(24).optional().allow(""),
+
   SUPABASE_URL: Joi.string().uri().required(),
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().min(1).required(),
   SUPABASE_ANON_KEY: Joi.string().min(1).required(),

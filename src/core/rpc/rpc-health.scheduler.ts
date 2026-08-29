@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
+import { RpcMetricsService } from "./rpc-metrics.service";
 import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
 
 export const HEALTH_INTERVAL_MS = 20_000;
@@ -11,7 +12,10 @@ export class RpcHealthScheduler {
   private readonly logger = new Logger(RpcHealthScheduler.name);
   private running = false;
 
-  constructor(private readonly pool: RpcPoolService) {}
+  constructor(
+    private readonly pool: RpcPoolService,
+    private readonly metrics: RpcMetricsService
+  ) {}
 
   @Interval("rpc-pool-health", HEALTH_INTERVAL_MS)
   async handleInterval(): Promise<void> {
@@ -33,6 +37,16 @@ export class RpcHealthScheduler {
         this.pool.all().map((endpoint) => this.probe(endpoint))
       );
       this.pool.applyHealthResults(results);
+
+      // Publish after the pool has settled state, so the gauges reflect the
+      // up/degraded/down decision rather than the raw probe.
+      for (const endpoint of this.pool.all()) {
+        this.metrics.observeEndpointState(
+          endpoint.config.label,
+          endpoint.state,
+          endpoint.ledgerLag
+        );
+      }
     } catch (err) {
       this.logger.error(
         `RPC health sweep failed unexpectedly: ${

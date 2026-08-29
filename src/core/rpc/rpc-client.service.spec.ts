@@ -1,5 +1,6 @@
 import { RpcClientService, RpcPoolExhaustedError } from "./rpc-client.service";
 import { RpcCacheService } from "./rpc-cache.service";
+import { RpcMetricsService } from "./rpc-metrics.service";
 import { PoolEndpoint, RpcPoolService } from "./rpc-pool.service";
 
 interface FakeEndpoint extends PoolEndpoint {
@@ -46,6 +47,7 @@ describe("RpcClientService", () => {
   let client: RpcClientService;
   let pool: RpcPoolService;
   let cache: RpcCacheService;
+  let metrics: RpcMetricsService;
 
   beforeEach(() => {
     // Full-jitter backoff with random()=0 collapses every sleep to 0ms.
@@ -70,7 +72,8 @@ describe("RpcClientService", () => {
         hit: false,
       }),
     } as unknown as RpcCacheService;
-    client = new RpcClientService(pool, cache);
+    metrics = new RpcMetricsService();
+    client = new RpcClientService(pool, cache, metrics);
   });
 
   afterEach(() => {
