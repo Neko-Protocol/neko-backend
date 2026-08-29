@@ -4,7 +4,10 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { SupabaseService } from "@core/supabase/supabase.service";
-import { isSegmentId } from "../../segments/segments.types";
+import {
+  isAudienceId,
+  isAutomationAudience,
+} from "../audiences/mailing-audiences.types";
 import { isTriggerType } from "../mailing-triggers.types";
 import { MailingTemplatesService } from "../templates/mailing-templates.service";
 import { CreateMailingAutomationDto } from "./dto/create-mailing-automation.dto";
@@ -150,8 +153,12 @@ export class MailingAutomationsService {
     }
 
     const segment = typeof body.segment === "string" ? body.segment : "all";
-    if (!isSegmentId(segment)) {
+    if (!isAudienceId(segment)) {
       throw new BadRequestException({ code: "INVALID_SEGMENT" });
+    }
+    // Wallet-less audiences (admins) can't be enrolled against a wallet trigger.
+    if (!isAutomationAudience(segment)) {
+      throw new BadRequestException({ code: "AUDIENCE_NOT_AUTOMATABLE" });
     }
 
     let delay_unit: DelayUnit = "days";
@@ -235,8 +242,11 @@ export class MailingAutomationsService {
     }
 
     if (body.segment !== undefined) {
-      if (!isSegmentId(body.segment)) {
+      if (!isAudienceId(body.segment)) {
         throw new BadRequestException({ code: "INVALID_SEGMENT" });
+      }
+      if (!isAutomationAudience(body.segment)) {
+        throw new BadRequestException({ code: "AUDIENCE_NOT_AUTOMATABLE" });
       }
       payload.segment = body.segment;
     }

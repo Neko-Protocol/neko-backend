@@ -4,6 +4,7 @@ import { AdminAnalyticsModule } from "./admin-analytics/admin-analytics.module";
 import { AdminAuthModule } from "./admin-auth/admin-auth.module";
 import { AuditModule } from "./audit/audit.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { MailingModule } from "./mailing/mailing.module";
 import { ReferralsModule } from "./referrals/referrals.module";
 import { UsersModule } from "./users/users.module";
 
@@ -16,6 +17,7 @@ import { UsersModule } from "./users/users.module";
     AuditModule,
     AdminAuthModule,
     AdminAnalyticsModule,
+    MailingModule,
   ],
 })
 export class PlatformModule {}

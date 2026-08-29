@@ -1,8 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { AuditService } from "@domains/platform/audit/audit.service";
-import { SegmentsService } from "../../segments/segments.service";
-import { isSegmentId, SegmentId } from "../../segments/segments.types";
+import { MailingAudiencesService } from "../audiences/mailing-audiences.service";
+import { AudienceId, isAudienceId } from "../audiences/mailing-audiences.types";
 import { EnrollmentCandidate } from "./mailing-enrollment.types";
 
 type Row = Record<string, unknown>;
@@ -37,7 +37,7 @@ export class MailingEnrollmentService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly audit: AuditService,
-    private readonly segments: SegmentsService
+    private readonly audiences: MailingAudiencesService
   ) {}
 
   private async loadVerifiedUsers(): Promise<Map<string, string>> {
@@ -334,11 +334,16 @@ export class MailingEnrollmentService {
       }
     }
 
-    if (automation.segment !== "all" && isSegmentId(automation.segment)) {
-      const recipients = await this.segments.getSegmentRecipients(
-        automation.segment as SegmentId
+    if (automation.segment !== "all" && isAudienceId(automation.segment)) {
+      const recipients = await this.audiences.getRecipients(
+        automation.segment as AudienceId
       );
-      const allowed = new Set(recipients.map((r) => r.wallet_address));
+      // Admin-list recipients carry no wallet; they can't match a candidate.
+      const allowed = new Set(
+        recipients
+          .map((r) => r.wallet_address)
+          .filter((w): w is string => w !== null)
+      );
       candidates = candidates.filter((c) => allowed.has(c.wallet_address));
     }
 
