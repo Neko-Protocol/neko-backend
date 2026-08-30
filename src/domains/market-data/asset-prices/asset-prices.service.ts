@@ -8,10 +8,16 @@ import {
   type StellarPriceService,
 } from "@neko/keeper";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { RedisCacheService } from "@core/cache/redis-cache.service";
 import { STELLAR_PRICE_SERVICE } from "./asset-prices.tokens";
 
 export interface RecordPricesResult {
   inserted: number;
+}
+
+export interface SpotPrice {
+  price: number;
+  source: string | null;
 }
 
 export interface AssetPriceHistoryRow {
@@ -19,6 +25,17 @@ export interface AssetPriceHistoryRow {
   source: string | null;
   recorded_at: string;
 }
+
+/**
+ * How long a spot price is served without going upstream.
+ *
+ * This is what turns the cost of pricing from "users times assets" into
+ * "assets times TTL": every visitor used to make their own call per asset, so
+ * the free CoinGecko tier saw a burst on each page load. One minute matches
+ * the in-process TTL StellarPriceService already applies and is no staler
+ * than what the browser tolerated before.
+ */
+const SPOT_TTL_MS = 60_000;
 
 const HISTORY_WINDOW_DAYS = 30;
 const HISTORY_ROW_LIMIT = 10_000;
@@ -47,6 +64,7 @@ export class AssetPricesService {
   constructor(
     private readonly config: ConfigService,
     private readonly supabase: SupabaseService,
+    private readonly cache: RedisCacheService,
     @Inject(STELLAR_PRICE_SERVICE)
     private readonly priceService: StellarPriceService
   ) {
@@ -93,6 +111,54 @@ export class AssetPricesService {
 
     this.logger.log(`[asset-prices] inserted ${rows.length} rows`);
     return { inserted: rows.length };
+  }
+
+  /**
+   * Current price for each requested symbol, cached in Redis.
+   *
+   * A symbol we do not have configured resolves to a zero price rather than an
+   * error: the caller asked for a batch, and one unknown code should not cost
+   * it the prices it can have.
+   *
+   * A failed lookup is cached too. It reads as "no price for now", which is
+   * the point — when CoinGecko rate-limits us, retrying on every request is
+   * how we stay rate-limited.
+   */
+  async getSpotPrices(symbols: string[]): Promise<Record<string, SpotPrice>> {
+    const assets = getAssetsConfig(this.networkId);
+
+    const entries = await Promise.all(
+      symbols.map(async (symbol): Promise<[string, SpotPrice]> => {
+        const asset = assets[symbol];
+        if (!asset) return [symbol, { price: 0, source: null }];
+
+        try {
+          const { value } = await this.cache.through<SpotPrice>(
+            `asset-price:${this.networkId}:${symbol}`,
+            SPOT_TTL_MS,
+            async () => {
+              const { price, source } =
+                await this.priceService.getPriceWithSource(
+                  asset.code,
+                  asset.contract
+                );
+              return { price, source: source ?? null };
+            }
+          );
+          return [symbol, value];
+        } catch (err) {
+          // The chain already swallows per-source failures, so reaching here
+          // means something unexpected. Report the symbol as unpriced rather
+          // than failing the whole batch.
+          this.logger.warn(
+            `[asset-prices] spot ${symbol} failed: ${(err as Error).message}`
+          );
+          return [symbol, { price: 0, source: null }];
+        }
+      })
+    );
+
+    return Object.fromEntries(entries);
   }
 
   async getHistory(symbol: string): Promise<AssetPriceHistoryRow[]> {
