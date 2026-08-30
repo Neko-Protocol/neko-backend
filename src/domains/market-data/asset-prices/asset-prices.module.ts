@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { AssetPricesController } from "./asset-prices.controller";
 import { AssetPricesCron } from "./asset-prices.cron";
 import { AssetPricesService } from "./asset-prices.service";
@@ -13,8 +14,9 @@ import { createStellarPriceService } from "./stellar-price.factory";
     AssetPricesCron,
     {
       provide: STELLAR_PRICE_SERVICE,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => createStellarPriceService(config),
+      inject: [ConfigService, StellarRpcService],
+      useFactory: (config: ConfigService, stellarRpc: StellarRpcService) =>
+        createStellarPriceService(config, stellarRpc),
     },
   ],
   exports: [AssetPricesService, STELLAR_PRICE_SERVICE],

@@ -331,6 +331,7 @@ export class VaultApyService {
       const client = new DefindexVaultClient({
         contractId: vaultId,
         rpcUrl,
+        server: this.stellar.rpc,
         networkPassphrase,
         publicKey: keypair.publicKey(),
         ...(rpcUrl.startsWith("http://") ? { allowHttp: true } : {}),

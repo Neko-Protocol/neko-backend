@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import type { rpc } from "@stellar/stellar-sdk";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import {
   createOrchestrator,
   setContractErrorExtractor,
@@ -21,7 +23,7 @@ export class OrchestratorService {
   private readonly logger = new Logger(OrchestratorService.name);
   private readonly built: CreatedOrchestrator;
 
-  constructor(config: ConfigService) {
+  constructor(config: ConfigService, stellarRpc: StellarRpcService) {
     setContractErrorExtractor((cause) =>
       cause instanceof Error ? cause.message : String(cause ?? "")
     );
@@ -30,6 +32,21 @@ export class OrchestratorService {
     const passphrase = config.getOrThrow<string>("STELLAR_NETWORK_PASSPHRASE");
     const horizonUrl = config.get<string>("STELLAR_HORIZON_URL");
 
+    /**
+     * Resolved on access rather than now.
+     *
+     * The orchestrator is built here, during provider construction, and the
+     * pool's client does not exist until StellarRpcService's onModuleInit.
+     * Reading it now would capture undefined, the adapters would fall back to
+     * the single-endpoint URL, and these reads would be off the pool with
+     * nothing to show for it. Adapters read `network.server` per call, by
+     * which time the pool is up.
+     */
+    const pooledServer = new Proxy({} as rpc.Server, {
+      get: (_target, prop) =>
+        (stellarRpc.rpc as unknown as Record<string | symbol, unknown>)?.[prop],
+    });
+
     this.built = createOrchestrator({
       network: {
         id: networkId,
@@ -37,6 +54,7 @@ export class OrchestratorService {
         passphrase,
         horizonUrl,
         allowHttp: rpcUrl.startsWith("http://"),
+        server: pooledServer,
       },
       contractToCodeMap: {},
     });
