@@ -13,7 +13,22 @@ jest.mock("@neko/keeper", () => ({
 
 import { AssetPricesService } from "./asset-prices.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { RedisCacheService } from "@core/cache/redis-cache.service";
 import { STELLAR_PRICE_SERVICE } from "./asset-prices.tokens";
+
+/** RedisCacheService is @Global() in the app; test modules must provide it. */
+function passThroughCache() {
+  return {
+    through: async (
+      _key: string,
+      _ttl: number,
+      fetch: () => Promise<unknown>
+    ) => ({
+      value: await fetch(),
+      hit: false,
+    }),
+  } as unknown as RedisCacheService;
+}
 
 describe("AssetPricesService", () => {
   function makeConfig() {
@@ -44,6 +59,7 @@ describe("AssetPricesService", () => {
       providers: [
         AssetPricesService,
         { provide: SupabaseService, useValue: supabase },
+        { provide: RedisCacheService, useValue: passThroughCache() },
         { provide: STELLAR_PRICE_SERVICE, useValue: priceService },
       ],
     }).compile();
@@ -76,6 +92,7 @@ describe("AssetPricesService", () => {
       providers: [
         AssetPricesService,
         { provide: SupabaseService, useValue: supabase },
+        { provide: RedisCacheService, useValue: passThroughCache() },
         { provide: STELLAR_PRICE_SERVICE, useValue: priceService },
       ],
     }).compile();
@@ -109,6 +126,7 @@ describe("AssetPricesService", () => {
       providers: [
         AssetPricesService,
         { provide: SupabaseService, useValue: supabase },
+        { provide: RedisCacheService, useValue: passThroughCache() },
         { provide: STELLAR_PRICE_SERVICE, useValue: priceService },
       ],
     }).compile();
@@ -133,6 +151,7 @@ describe("AssetPricesService", () => {
         service: new AssetPricesService(
           makeConfig() as unknown as ConfigService,
           { client: { from } } as unknown as SupabaseService,
+          {} as never, // cache — getHistory reads Supabase directly
           {} as never
         ),
         order,

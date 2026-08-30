@@ -16,6 +16,7 @@ import { ConfigService } from "@nestjs/config";
 import { fetchManagedFunds } from "../vault-invest/keeper/tx";
 import { VaultPpsService } from "./vault-pps.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 
 const { Client: ClientMock } = jest.requireMock("@neko/defindex-vault") as {
   Client: jest.Mock;
@@ -57,6 +58,9 @@ describe("VaultPpsService", () => {
         VaultPpsService,
         { provide: ConfigService, useValue: config },
         { provide: SupabaseService, useValue: supabase },
+        // The vault client is mocked, so the pool proxy is never called —
+        // it only has to be resolvable.
+        { provide: StellarRpcService, useValue: { rpc: {} } },
       ],
     }).compile();
 
@@ -84,7 +88,12 @@ describe("VaultPpsService", () => {
       } as unknown as ConfigService;
 
       return {
-        service: new VaultPpsService(config, supabase),
+        service: new VaultPpsService(
+          config,
+          supabase,
+          // These tests exercise Supabase reads, not RPC.
+          {} as never
+        ),
         order,
         limit,
       };

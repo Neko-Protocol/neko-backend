@@ -4,30 +4,32 @@ import {
   HealthIndicatorResult,
   HealthCheckError,
 } from "@nestjs/terminus";
-import { StellarRpcService } from "../../stellar/stellar-rpc.service";
+import { RpcPoolService } from "../../rpc/pool/rpc-pool.service";
 
 @Injectable()
 export class SorobanRpcHealthIndicator extends HealthIndicator {
-  constructor(private readonly stellar: StellarRpcService) {
+  constructor(private readonly pool: RpcPoolService) {
     super();
   }
 
+  /**
+   * Reports the whole pool rather than a single ping. Readiness only fails when
+   * every endpoint is unusable — a degraded or downed endpoint is expected and
+   * is exactly what the failover exists to absorb.
+   */
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
-    try {
-      const resp = await this.stellar.rpc.getHealth();
-      const isUp = resp.status === "healthy";
-      const result = this.getStatus(key, isUp, {
-        rpcStatus: resp.status,
-        network: this.stellar.getNetwork(),
-      });
-      if (!isUp)
-        throw new HealthCheckError(`Soroban RPC status=${resp.status}`, result);
-      return result;
-    } catch (err) {
-      const result = this.getStatus(key, false, {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw new HealthCheckError("Soroban RPC unreachable", result);
+    const endpoints = this.pool.snapshot();
+    const usable = this.pool.hasUsableEndpoint();
+
+    const result = this.getStatus(key, usable, {
+      endpoints,
+      usableCount: endpoints.filter((e) => e.state !== "down").length,
+      totalCount: endpoints.length,
+    });
+
+    if (!usable) {
+      throw new HealthCheckError("No usable Soroban RPC endpoint", result);
     }
+    return result;
   }
 }

@@ -18,6 +18,7 @@ jest.mock("./lp-screen", () => ({
 import { ConfigService } from "@nestjs/config";
 import { Client as DefindexVaultClient } from "@neko/defindex-vault";
 import { parseAllVaultIds } from "@neko/keeper";
+import { RedisCacheService } from "../../../core/cache/redis-cache.service";
 import { DashboardCache } from "./cache/dashboard-cache";
 import { DashboardService } from "./dashboard.service";
 import { batchCheckLpBalances } from "./lp-screen";
@@ -45,7 +46,16 @@ function build({
   priceService?: { getPriceWithSource: jest.Mock };
   config?: Partial<Record<string, string>>;
 }) {
-  const cache = new DashboardCache();
+  // Redis disabled: the service under test only needs caching to behave,
+  // and DashboardCache falls back to its in-process store.
+  const cache = new DashboardCache({
+    isEnabled: () => false,
+    through: async (_k: string, _t: number, f: () => Promise<unknown>) => ({
+      value: await f(),
+      hit: false,
+    }),
+    invalidate: async () => undefined,
+  } as unknown as RedisCacheService);
   const stellar = {
     rpc: { __mock: "rpc.Server" },
     getNetworkPassphrase: () => "Test SDF Network ; September 2015",

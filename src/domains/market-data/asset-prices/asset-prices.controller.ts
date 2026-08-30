@@ -1,7 +1,8 @@
-import { Controller, Get, HttpCode, Param, Post } from "@nestjs/common";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
+import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { AssetPricesService } from "./asset-prices.service";
+import { SpotSymbolsDto } from "./dto/spot-symbols.dto";
 import { SymbolParamDto } from "./dto/symbol-param.dto";
 
 @ApiTags("asset-prices")
@@ -17,6 +18,27 @@ export class AssetPricesController {
   })
   runNow() {
     return this.svc.recordOnce();
+  }
+
+  /**
+   * Declared before `:symbol` on purpose — Nest matches routes in order, and
+   * the parameterised route would otherwise swallow "spot" as an asset code.
+   */
+  @Get("spot")
+  @Throttle({
+    short: { limit: 20, ttl: 1_000 },
+    default: { limit: 120, ttl: 60_000 },
+  })
+  @ApiQuery({
+    name: "symbols",
+    example: "XLM,USDC,GYEN",
+    description: "Comma-separated asset codes.",
+  })
+  @ApiOperation({
+    summary: "Current USD price for one or more asset symbols.",
+  })
+  async getSpot(@Query() query: SpotSymbolsDto) {
+    return { data: await this.svc.getSpotPrices(query.symbols) };
   }
 
   @Get(":symbol")

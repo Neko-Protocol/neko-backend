@@ -13,13 +13,29 @@ export const envValidationSchema = Joi.object({
     .pattern(/^(mainnet|testnet|public|pubnet|local)$/i)
     .required(),
   STELLAR_NETWORK_PASSPHRASE: Joi.string().min(1).required(),
+  // Legacy single-endpoint config. Still honoured as a fallback when
+  // STELLAR_RPC_ENDPOINTS is unset, so existing deployments keep booting.
   STELLAR_RPC_URL: Joi.string()
     .uri({ scheme: ["http", "https"] })
     .required(),
+  // JSON array of { url, label?, priority?, authHeader? }, highest priority
+  // first. Takes precedence over STELLAR_RPC_URL when present.
+  STELLAR_RPC_ENDPOINTS: Joi.string().optional().allow(""),
   STELLAR_HORIZON_URL: Joi.string()
     .uri({ scheme: ["http", "https"] })
     .required(),
   STELLAR_RPC_AUTH_HEADER: Joi.string().optional().allow(""),
+
+  // Optional. Unset means RPC response caching is disabled and every call
+  // goes upstream — the app boots and behaves correctly either way.
+  REDIS_URL: Joi.string()
+    .uri({ scheme: ["redis", "rediss"] })
+    .optional()
+    .allow(""),
+
+  // Bearer token Grafana (or any scraper) must present on GET /metrics.
+  // Unset disables the endpoint entirely rather than opening it.
+  METRICS_SCRAPE_TOKEN: Joi.string().min(24).optional().allow(""),
 
   SUPABASE_URL: Joi.string().uri().required(),
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().min(1).required(),

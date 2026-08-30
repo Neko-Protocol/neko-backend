@@ -1,0 +1,120 @@
+# Grafana alert rules for the RPC gateway, in provisioning format.
+#
+# These live here rather than only in a Grafana account so they can be
+# reviewed in a pull request and recreated from scratch. Import via
+# Alerting -> Alert rules -> Import, or apply with the Grafana provisioning
+# API / Terraform provider.
+#
+# Replace <DATASOURCE_UID> with the Prometheus data source UID and
+# <FOLDER_UID> with the target folder before applying.
+
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: neko-rpc
+    folder: neko
+    interval: 1m
+    rules:
+      - title: RPC success rate below 98%
+        condition: C
+        # The numerator is guarded with `or on() vector(0)` so a total
+        # failure still reads as 0% rather than vanishing. The denominator
+        # is deliberately NOT clamped: with no traffic it stays empty, the
+        # rule evaluates to no data and stays Normal. An earlier version
+        # divided by clamp_min(..., 0.001), which turned an idle backend
+        # into "0% success" and would have paged on every quiet period.
+        data:
+          - refId: A
+            datasourceUid: <DATASOURCE_UID>
+            model:
+              expr: >-
+                (sum(rate(neko_rpc_requests_total{outcome=~"ok|cached"}[5m]))
+                or on() vector(0))
+                / sum(rate(neko_rpc_requests_total[5m]))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [0.98] }
+        for: 5m
+        noDataState: Normal
+        execErrState: Normal
+        annotations:
+          summary: >-
+            RPC success rate fell below 98% - calls are failing across the
+            whole pool.
+
+      - title: RPC p95 latency above 2s
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: <DATASOURCE_UID>
+            model:
+              expr: >-
+                histogram_quantile(0.95, sum by (le)
+                (rate(neko_rpc_request_duration_seconds_bucket[5m])))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+        for: 5m
+        noDataState: Normal
+        execErrState: Normal
+        annotations:
+          summary: >-
+            RPC p95 latency above 2s - the app feels slow. Check latency by
+            upstream endpoint; usually one provider is dragging the pool.
+
+      - title: RPC pool fully down
+        condition: C
+        # 1m rather than 5m: this is an outage, not a trend. Every write is
+        # failing while it holds.
+        data:
+          - refId: A
+            datasourceUid: <DATASOURCE_UID>
+            model:
+              expr: sum(neko_rpc_endpoint_up)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 1m
+        noDataState: Normal
+        execErrState: Normal
+        annotations:
+          summary: No RPC endpoint is serving. Every write is failing.
+
+      - title: RPC endpoint ledger lag above 10
+        condition: C
+        # The pool degrades an endpoint past 5, so firing at 10 means the
+        # lag is persisting, or several endpoints are behind at once - which
+        # points at the network rather than one provider.
+        data:
+          - refId: A
+            datasourceUid: <DATASOURCE_UID>
+            model:
+              expr: max(neko_rpc_endpoint_ledger_lag)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [10] }
+        for: 5m
+        noDataState: Normal
+        execErrState: Normal
+        annotations:
+          summary: An endpoint is serving stale ledger state.

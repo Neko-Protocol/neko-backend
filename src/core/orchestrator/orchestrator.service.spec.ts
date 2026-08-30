@@ -18,6 +18,7 @@ jest.mock("@neko/orchestrator", () => ({
 }));
 
 import { OrchestratorService } from "./orchestrator.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 
 describe("OrchestratorService", () => {
   beforeEach(() => {
@@ -38,11 +39,17 @@ describe("OrchestratorService", () => {
                 "Public Global Stellar Network ; September 2015",
               STELLAR_RPC_URL: "https://soroban-mainnet.example/rpc",
               STELLAR_HORIZON_URL: "https://horizon-mainnet.example",
+              INTERNAL_API_KEY: "k".repeat(32),
+              PORT: 4000,
             }),
           ],
         }),
       ],
-      providers: [OrchestratorService],
+      providers: [
+        OrchestratorService,
+        // The pool client is resolved per call, so the token only has to exist.
+        { provide: StellarRpcService, useValue: { rpc: {} } },
+      ],
     }).compile();
 
     const svc = mod.get(OrchestratorService);
@@ -50,13 +57,20 @@ describe("OrchestratorService", () => {
     expect(setContractErrorExtractorMock).toHaveBeenCalledTimes(1);
     expect(createOrchestratorMock).toHaveBeenCalledTimes(1);
     const cfg = createOrchestratorMock.mock.calls[0][0];
-    expect(cfg.network).toEqual({
+    // `server` is a proxy resolved per call, so it is asserted separately.
+    const { server, ...network } = cfg.network;
+    expect(network).toEqual({
       id: "PUBLIC",
-      rpcUrl: "https://soroban-mainnet.example/rpc",
+      // The app's own passthrough, not a provider: consumers that cannot take
+      // a client still reach the pool through it.
+      rpcUrl: "http://127.0.0.1:4000/v1/rpc",
       passphrase: "Public Global Stellar Network ; September 2015",
       horizonUrl: "https://horizon-mainnet.example",
-      allowHttp: false,
+      allowHttp: true,
+      rpcHeaders: { "X-Internal-Key": "k".repeat(32) },
     });
+    // Adapters that can take a client must get the pool, not the URL.
+    expect(server).toBeDefined();
     expect(cfg.contractToCodeMap).toEqual({});
 
     const types = svc.poolRegistry
@@ -77,13 +91,19 @@ describe("OrchestratorService", () => {
           load: [
             () => ({
               STELLAR_NETWORK: "testnet",
+              INTERNAL_API_KEY: "k".repeat(32),
+              PORT: 4000,
               STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
               STELLAR_RPC_URL: "http://localhost:8000/rpc",
             }),
           ],
         }),
       ],
-      providers: [OrchestratorService],
+      providers: [
+        OrchestratorService,
+        // The pool client is resolved per call, so the token only has to exist.
+        { provide: StellarRpcService, useValue: { rpc: {} } },
+      ],
     }).compile();
 
     mod.get(OrchestratorService);
