@@ -51,10 +51,21 @@ export class RpcController {
    * Sits behind the global InternalApiKeyGuard, so it is only reachable
    * through the web-app's own proxy route — the browser never holds the key,
    * and provider credentials never leave this process.
+   *
+   * Both named throttlers are overridden, not just `default`. The global
+   * config also carries a `short` limiter of 20 requests per second, which a
+   * browser trips on an ordinary page load: the dashboard mounts nine vault
+   * cards at once and each one simulates a contract call, so overriding only
+   * the per-minute limit rate-limited real users rather than abusers. The
+   * burst allowance is what a page load needs; the per-minute ceiling is what
+   * actually bounds abuse.
    */
   @Post()
   @HttpCode(200)
-  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Throttle({
+    short: { limit: 100, ttl: 1_000 },
+    default: { limit: 600, ttl: 60_000 },
+  })
   async proxy(
     @Body() body: unknown
   ): Promise<JsonRpcResponse | JsonRpcResponse[]> {
