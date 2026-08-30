@@ -3,6 +3,7 @@ import { SupabaseService } from "@core/supabase/supabase.service";
 import { AuditService } from "@domains/platform/audit/audit.service";
 import { MailingAudiencesService } from "../audiences/mailing-audiences.service";
 import { AudienceId, isAudienceId } from "../audiences/mailing-audiences.types";
+import { AdminWalletBalanceService } from "../triggers/admin-wallet-balance.service";
 import { EnrollmentCandidate } from "./mailing-enrollment.types";
 
 type Row = Record<string, unknown>;
@@ -21,7 +22,7 @@ type DelayUnit = "minutes" | "hours" | "days";
 type AutomationForResolve = {
   trigger_type: string;
   trigger_params: Record<string, unknown>;
-  segment: string;
+  audience: string;
 };
 
 type ActiveAutomation = AutomationForResolve & {
@@ -37,8 +38,43 @@ export class MailingEnrollmentService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly audit: AuditService,
-    private readonly audiences: MailingAudiencesService
+    private readonly audiences: MailingAudiencesService,
+    private readonly adminWallet: AdminWalletBalanceService
   ) {}
+
+  /**
+   * Alerts every active admin while the keeper wallet is under the threshold.
+   *
+   * trigger_at is bucketed to the UTC day so the send key
+   * (message_id, email, trigger_at) collapses repeats within a day but lets a
+   * fresh reminder through tomorrow if the balance still hasn't recovered.
+   */
+  private async resolveAdminWalletCandidates(
+    thresholdXlm: number
+  ): Promise<EnrollmentCandidate[]> {
+    const balance = await this.adminWallet.getXlmBalance();
+    if (balance === null) {
+      this.logger.warn(
+        "admin wallet balance unavailable; skipping low-balance enrollment"
+      );
+      return [];
+    }
+    if (balance >= thresholdXlm) return [];
+
+    const admins = await this.audiences.getRecipients("admins");
+    const today = new Date().toISOString().slice(0, 10);
+    const trigger_at = `${today}T00:00:00.000Z`;
+
+    this.logger.warn(
+      `admin wallet balance ${balance} XLM is below ${thresholdXlm}; alerting ${admins.length} admin(s)`
+    );
+
+    return admins.map((a) => ({
+      wallet_address: null,
+      email: a.email,
+      trigger_at,
+    }));
+  }
 
   private async loadVerifiedUsers(): Promise<Map<string, string>> {
     const client = this.supabase.client;
@@ -248,40 +284,6 @@ export class MailingEnrollmentService {
     return out;
   }
 
-  private async resolveActivationCandidates(): Promise<EnrollmentCandidate[]> {
-    const client = this.supabase.client;
-    let offset = 0;
-    const out: EnrollmentCandidate[] = [];
-    for (;;) {
-      const { data, error } = await client
-        .from("activation_participants")
-        .select("matched_wallet,email,paid_at")
-        .eq("status", "paid")
-        .not("matched_wallet", "is", null)
-        .not("paid_at", "is", null)
-        .order("id", { ascending: true })
-        .range(offset, offset + PAGE_SIZE - 1);
-      if (error || !data?.length) break;
-      const rows = data as Row[];
-      for (const r of rows) {
-        const wallet =
-          typeof r.matched_wallet === "string" ? r.matched_wallet.trim() : "";
-        const email =
-          typeof r.email === "string" ? r.email.trim().toLowerCase() : "";
-        const paidAt = typeof r.paid_at === "string" ? r.paid_at : "";
-        if (!wallet || !email || !paidAt) continue;
-        out.push({
-          wallet_address: wallet,
-          email,
-          trigger_at: paidAt,
-        });
-      }
-      if (rows.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
-    }
-    return out;
-  }
-
   private applyDelay(
     triggerAtIso: string,
     delayValue: number,
@@ -302,9 +304,14 @@ export class MailingEnrollmentService {
   ): Promise<EnrollmentCandidate[]> {
     let candidates: EnrollmentCandidate[];
 
-    if (automation.trigger_type === "activation_paid") {
-      candidates = await this.resolveActivationCandidates();
-    } else {
+    if (automation.trigger_type === "admin_wallet_low_balance") {
+      const threshold = Number(automation.trigger_params?.threshold_xlm) || 50;
+      // Recipients are resolved from admin_emails directly, so the audience
+      // filter below would only ever narrow a list that's already correct.
+      return this.resolveAdminWalletCandidates(threshold);
+    }
+
+    {
       const verifiedUsers = await this.loadVerifiedUsers();
       switch (automation.trigger_type) {
         case "signup":
@@ -334,27 +341,37 @@ export class MailingEnrollmentService {
       }
     }
 
-    if (automation.segment !== "all" && isAudienceId(automation.segment)) {
+    if (automation.audience !== "all" && isAudienceId(automation.audience)) {
       const recipients = await this.audiences.getRecipients(
-        automation.segment as AudienceId
+        automation.audience as AudienceId
       );
-      // Admin-list recipients carry no wallet; they can't match a candidate.
-      const allowed = new Set(
+      // Wallet-less audiences (admins) are matched on email instead, so an
+      // admin who is also a user still receives triggered mail.
+      const allowedWallets = new Set(
         recipients
           .map((r) => r.wallet_address)
           .filter((w): w is string => w !== null)
       );
-      candidates = candidates.filter((c) => allowed.has(c.wallet_address));
+      const allowedEmails = new Set(
+        recipients
+          .filter((r) => r.wallet_address === null)
+          .map((r) => r.email.toLowerCase())
+      );
+      candidates = candidates.filter(
+        (c) =>
+          (c.wallet_address !== null && allowedWallets.has(c.wallet_address)) ||
+          allowedEmails.has(c.email.toLowerCase())
+      );
     }
 
     return candidates;
   }
 
-  async previewCount(automationId: string): Promise<number> {
+  async previewCount(messageId: string): Promise<number> {
     const { data, error } = await this.supabase.client
-      .from("mailing_automations")
-      .select("trigger_type,trigger_params,segment")
-      .eq("id", automationId)
+      .from("mailing_messages")
+      .select("trigger_type,trigger_params,audience")
+      .eq("id", messageId)
       .maybeSingle();
     if (error || !data || typeof data !== "object") return 0;
 
@@ -369,17 +386,18 @@ export class MailingEnrollmentService {
     const candidates = await this.resolveCandidates({
       trigger_type: String(row.trigger_type ?? ""),
       trigger_params,
-      segment: typeof row.segment === "string" ? row.segment : "all",
+      audience: typeof row.audience === "string" ? row.audience : "all",
     });
     return candidates.length;
   }
 
   async run(): Promise<{ automationsProcessed: number; enrolled: number }> {
     const { data, error } = await this.supabase.client
-      .from("mailing_automations")
+      .from("mailing_messages")
       .select(
-        "id,trigger_type,trigger_params,delay_value,delay_unit,segment,status"
+        "id,trigger_type,trigger_params,delay_value,delay_unit,audience,status"
       )
+      .eq("kind", "automation")
       .eq("status", "active");
 
     if (error || !data?.length) {
@@ -416,13 +434,13 @@ export class MailingEnrollmentService {
         trigger_params,
         delay_value,
         delay_unit,
-        segment: typeof raw.segment === "string" ? raw.segment : "all",
+        audience: typeof raw.audience === "string" ? raw.audience : "all",
       };
 
       try {
         const candidates = await this.resolveCandidates(automation);
         const rows = candidates.map((c) => ({
-          automation_id: automation.id,
+          message_id: automation.id,
           wallet_address: c.wallet_address,
           email: c.email,
           trigger_at: c.trigger_at,
@@ -437,9 +455,9 @@ export class MailingEnrollmentService {
         for (let i = 0; i < rows.length; i += BATCH_CHUNK_SIZE) {
           const chunk = rows.slice(i, i + BATCH_CHUNK_SIZE);
           const { error: upsertError } = await this.supabase.client
-            .from("mailing_automation_runs")
+            .from("mailing_sends")
             .upsert(chunk, {
-              onConflict: "automation_id,wallet_address",
+              onConflict: "message_id,email",
               ignoreDuplicates: true,
             });
           if (upsertError) {
