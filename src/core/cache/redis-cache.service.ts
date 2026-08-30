@@ -15,8 +15,18 @@ const CONNECT_TIMEOUT_MS = 3_000;
  * healthy while every read goes upstream.
  */
 const FIRST_CONNECT_GRACE_MS = 10_000;
-/** A cache operation slower than this is not worth waiting for. */
-const OP_TIMEOUT_MS = 250;
+/**
+ * How long a single cache operation may take before it is abandoned.
+ *
+ * The default is sized for a hop to a Redis in the same private network, not
+ * for loopback. An earlier value of 250ms was tuned against a local Redis and
+ * quietly turned every read on a deployed environment into a miss: the
+ * operation timed out, the timeout was swallowed, and the caller saw exactly
+ * what an empty cache looks like.
+ *
+ * Override with REDIS_OP_TIMEOUT_MS when the network says otherwise.
+ */
+const DEFAULT_OP_TIMEOUT_MS = 1_000;
 
 /**
  * Shared Redis-backed cache primitive.
@@ -40,11 +50,23 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
   private readonly inflight = new Map<string, Promise<unknown>>();
   private everConnected = false;
   private firstConnectTimer: NodeJS.Timeout | null = null;
+  private opTimeoutMs = DEFAULT_OP_TIMEOUT_MS;
+
+  /**
+   * Operation outcomes, so a cache that is connected but never answering in
+   * time is distinguishable from one that is simply cold. Without this the two
+   * look identical from outside, which is how a deployed cache ran for a week
+   * serving nothing.
+   */
+  private readonly stats = { reads: 0, writes: 0, timeouts: 0, errors: 0 };
 
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit(): void {
     const url = this.configService.get<string>("REDIS_URL");
+    this.opTimeoutMs =
+      Number(this.configService.get<string>("REDIS_OP_TIMEOUT_MS")) ||
+      DEFAULT_OP_TIMEOUT_MS;
 
     if (!url || !url.trim()) {
       this.logger.log(
@@ -58,6 +80,18 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,
       retryStrategy: (times) => Math.min(times * 500, 5_000),
+      /**
+       * Resolve both A and AAAA records.
+       *
+       * ioredis looks up IPv4 only by default, and Railway's private network
+       * publishes IPv6 only — so a perfectly healthy Redis at
+       * `*.railway.internal` never resolves. The cache is fail-open, so
+       * nothing breaks and nothing is logged where anyone looks: every read
+       * simply reports a miss, which is indistinguishable from a cold cache.
+       *
+       * `REDIS_FAMILY=6` forces IPv6 if dual-stack proves flaky on reconnect.
+       */
+      family: Number(this.configService.get<string>("REDIS_FAMILY")) || 0,
     });
 
     this.client.on("ready", () => {
@@ -158,13 +192,38 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
 
   private async read<T>(key: string): Promise<T | undefined> {
     if (!this.client) return undefined;
+    this.stats.reads += 1;
     try {
-      const raw = await withTimeout(this.client.get(key), OP_TIMEOUT_MS);
+      const raw = await withTimeout(this.client.get(key), this.opTimeoutMs);
       if (raw === null || raw === undefined) return undefined;
       return decode<T>(raw);
-    } catch {
+    } catch (err) {
+      this.recordFailure(err);
       return undefined;
     }
+  }
+
+  /**
+   * A timed-out operation is not a miss, even though the caller cannot tell
+   * the difference. Counting them apart is what makes a silently useless cache
+   * visible.
+   */
+  private recordFailure(err: unknown): void {
+    if (err instanceof Error && /timeout/i.test(err.message)) {
+      this.stats.timeouts += 1;
+    } else {
+      this.stats.errors += 1;
+    }
+  }
+
+  /** Operation counters, for health reporting. */
+  getStats(): {
+    reads: number;
+    writes: number;
+    timeouts: number;
+    errors: number;
+  } {
+    return { ...this.stats };
   }
 
   private async write(key: string, value: unknown, ttlMs: number) {
@@ -180,12 +239,15 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
         );
         return;
       }
+      this.stats.writes += 1;
       await withTimeout(
         this.client.set(key, payload, "PX", ttlMs),
-        OP_TIMEOUT_MS
+        this.opTimeoutMs
       );
-    } catch {
-      // A failed write only costs a miss next time.
+    } catch (err) {
+      // A failed write only costs a miss next time — but a run of them means
+      // nothing is ever being stored, which is worth being able to see.
+      this.recordFailure(err);
     }
   }
 }
