@@ -14,6 +14,7 @@ import {
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ReferralsService } from "../referrals/referrals.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { EmailConfirmDto } from "./dto/email-confirm.dto";
 import { EmailStartDto } from "./dto/email-start.dto";
 import { RegisterUserDto } from "./dto/register-user.dto";
@@ -29,7 +30,8 @@ export class UsersService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly config: ConfigService,
-    private readonly referrals: ReferralsService
+    private readonly referrals: ReferralsService,
+    private readonly notifications: NotificationsService
   ) {
     const url = this.config.get<string>("SUPABASE_URL");
     const anonKey = this.config.get<string>("SUPABASE_ANON_KEY");
@@ -98,6 +100,14 @@ export class UsersService {
           referred_wallet: wallet,
         });
       }
+
+      // Same branch, same reason: reaching here means the insert succeeded, so
+      // this is a genuinely new wallet rather than a reconnect.
+      await this.notifications.emit({
+        trigger: "signup",
+        walletAddress: wallet,
+        dedupeKey: "signup",
+      });
 
       return { ok: true };
     } catch (err) {
@@ -255,7 +265,14 @@ export class UsersService {
         })
         .eq("wallet_address", wallet);
 
-      return !updateError;
+      if (updateError) return false;
+
+      // Verifying an email is what makes a pending referral confirmable, so
+      // promote it here instead of waiting for someone to open the referral
+      // page. Best-effort: the email is verified either way.
+      await this.referrals.confirmPending().catch(() => undefined);
+
+      return true;
     } catch (err) {
       this.logger.warn(
         `confirmEmailByTokenHash failed: ${(err as Error).message}`
@@ -302,6 +319,8 @@ export class UsersService {
         code: ErrorCode.UPDATE_FAILED,
       });
     }
+
+    await this.referrals.confirmPending().catch(() => undefined);
 
     return { ok: true };
   }

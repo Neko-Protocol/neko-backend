@@ -7,6 +7,7 @@ import {
   type NetworkId,
 } from "@neko/keeper";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { CreateAuditDto } from "./dto/create-audit.dto";
 
 export interface LogAuditResult {
@@ -15,6 +16,24 @@ export interface LogAuditResult {
 }
 
 export type AuditRow = Record<string, unknown>;
+
+/** Deposit-shaped actions that satisfy the `first_deposit` notification trigger. */
+const NOTIFY_DEPOSIT_ACTIONS = new Set([
+  "vaults_deposit",
+  "lend_deposit",
+  "pool_repay",
+]);
+
+/**
+ * Token amounts for display. Trailing zeros are trimmed so a whole number reads
+ * as "5" rather than "5.000000", and the cap keeps a float artefact from
+ * rendering as a wall of digits in a one-line notification.
+ */
+function formatAmount(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "";
+  const fixed = value.toFixed(value < 1 ? 6 : 2);
+  return fixed.replace(/\.?0+$/, "");
+}
 
 export interface AuditQueryFilter {
   whereIn?: { column: string; values: (string | number)[] };
@@ -47,7 +66,8 @@ export class AuditService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly supabase: SupabaseService
+    private readonly supabase: SupabaseService,
+    private readonly notifications: NotificationsService
   ) {
     const raw = this.config.get<string>("STELLAR_NETWORK") ?? "mainnet";
     this.networkId = getCurrentNetworkId(raw);
@@ -168,10 +188,63 @@ export class AuditService {
         isFirstVaultDeposit = count === 1;
       }
 
+      await this.notifyForAction(dto, auditId, assetIn, assetOut);
+
       return { ok: true, isFirstVaultDeposit };
     } catch (err) {
       this.logger.warn(`[audit] log failed: ${(err as Error).message}`);
       return { ok: true };
+    }
+  }
+
+  /**
+   * Fires the in-app notification for this action, in the same call that
+   * recorded it, so the bell updates as soon as the transaction lands rather
+   * than waiting on the mailing crons. The matching email still goes out later
+   * on its own schedule, and on its own cadence: email fires on the first swap
+   * or deposit only, while the tray gets one item per event.
+   *
+   * The audit row id is the dedupe key, which is what makes "every time" safe -
+   * one notification per recorded action, and a retried request that inserts no
+   * new audit row produces no new notification.
+   */
+  private async notifyForAction(
+    dto: CreateAuditDto,
+    auditId: string,
+    assetIn: string | null,
+    assetOut: string | null
+  ): Promise<void> {
+    const wallet = dto.wallet_address;
+    if (!wallet) return;
+
+    if (dto.action_type === "swap") {
+      await this.notifications.emit({
+        trigger: "swap_completed",
+        walletAddress: wallet,
+        dedupeKey: `swap:${auditId}`,
+        params: {
+          amount_in: formatAmount(dto.token_amount_in),
+          asset_in: assetIn ?? "",
+          amount_out: formatAmount(dto.amount_out),
+          asset_out: assetOut ?? "",
+        },
+      });
+      return;
+    }
+
+    if (NOTIFY_DEPOSIT_ACTIONS.has(dto.action_type)) {
+      await this.notifications.emit({
+        trigger: "first_deposit",
+        walletAddress: wallet,
+        dedupeKey: `deposit:${auditId}`,
+        params: {
+          amount: formatAmount(dto.token_amount_in),
+          asset: assetIn ?? "",
+          // For a vault deposit this is the share symbol, which reads as the
+          // vault's name; pool actions fall back to the pool id.
+          destination: assetOut ?? dto.pool_id ?? "",
+        },
+      });
     }
   }
 
