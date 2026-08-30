@@ -8,6 +8,8 @@ export interface EmailMessage {
   html: string;
   /** Plain-text alternative. Improves deliverability (fewer spam-filter hits) for HTML-only sends. */
   text?: string;
+  /** Extra SMTP headers, e.g. RFC 8058 List-Unsubscribe on bulk mailing sends. */
+  headers?: Record<string, string>;
 }
 
 export interface TemplateEmailMessage {
@@ -34,7 +36,8 @@ export class EmailService {
     const key = this.config.get<string>("RESEND_API_KEY");
     this.client = key ? new Resend(key) : null;
     this.from =
-      this.config.get<string>("RESEND_FROM_EMAIL") ?? "neko@nekoprotocol.xyz";
+      this.config.get<string>("RESEND_FROM_EMAIL") ??
+      "noreply@nekoprotocol.xyz";
   }
 
   get isConfigured(): boolean {
@@ -51,10 +54,26 @@ export class EmailService {
         subject: message.subject,
         html: message.html,
         ...(message.text ? { text: message.text } : {}),
+        ...(message.headers ? { headers: message.headers } : {}),
       });
     } catch (err) {
       this.logger.warn(`email send failed: ${String(err)}`);
     }
+  }
+
+  /** Strict single send. Throws on failure (caller must handle success/failure). */
+  async sendStrict(message: EmailMessage): Promise<void> {
+    if (!this.client) {
+      throw new Error("RESEND_API_KEY not configured");
+    }
+    const { error } = await this.client.emails.send({
+      from: this.from,
+      to: [message.to],
+      subject: message.subject,
+      html: message.html,
+      ...(message.headers ? { headers: message.headers } : {}),
+    });
+    if (error) throw new Error(error.message ?? "Resend send error");
   }
 
   /** Best-effort single template send. Swallows errors (caller flow must not fail). */
@@ -91,6 +110,7 @@ export class EmailService {
           to: [m.to],
           subject: m.subject,
           html: m.html,
+          ...(m.headers ? { headers: m.headers } : {}),
         }))
       );
       if (error) throw new Error(error.message ?? "Resend batch error");
