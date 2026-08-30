@@ -42,6 +42,8 @@ export const envValidationSchema = Joi.object({
     .allow(""),
   CRON_SECRET: Joi.string().optional().allow(""),
 
+  // Falls back to the public key of VAULT_MANAGER_SECRET_KEY when unset.
+  ADMIN_WALLET_ADDRESS: Joi.string().optional().allow(""),
   RESEND_API_KEY: Joi.string().optional().allow(""),
-  RESEND_FROM_EMAIL: Joi.string().default("neko@nekoprotocol.xyz"),
+  RESEND_FROM_EMAIL: Joi.string().default("noreply@nekoprotocol.xyz"),
 });
