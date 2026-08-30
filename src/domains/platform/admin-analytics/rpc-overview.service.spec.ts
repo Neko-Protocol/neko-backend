@@ -1,4 +1,4 @@
-import { InfrastructureService } from "./infrastructure.service";
+import { RpcOverviewService } from "./rpc-overview.service";
 import type { MetricsRegistryService } from "@core/observability/metrics/metrics-registry.service";
 import type { RpcPoolService } from "@core/rpc/pool/rpc-pool.service";
 
@@ -21,12 +21,12 @@ const ENDPOINTS = [
   { label: "quasar", state: "degraded" },
 ];
 
-describe("InfrastructureService", () => {
+describe("RpcOverviewService", () => {
   it("counts a degraded endpoint as usable", async () => {
     // Degraded means "reachable but its ledger trails" — the pool still routes
     // to it once healthy endpoints are exhausted, so calling it unusable would
     // understate what the system can serve.
-    const svc = new InfrastructureService(makePool(ENDPOINTS), makeMetrics({}));
+    const svc = new RpcOverviewService(makePool(ENDPOINTS), makeMetrics({}));
 
     const snap = await svc.getSnapshot();
 
@@ -35,7 +35,7 @@ describe("InfrastructureService", () => {
   });
 
   it("splits request counters by method and by endpoint", async () => {
-    const svc = new InfrastructureService(
+    const svc = new RpcOverviewService(
       makePool([]),
       makeMetrics({
         neko_rpc_requests_total: [
@@ -85,7 +85,7 @@ describe("InfrastructureService", () => {
   it("reports no traffic as an unknown rate, not as zero", async () => {
     // Zero would read as a total outage on an idle backend, which is the same
     // mistake that made the Grafana success-rate alert fire on an empty window.
-    const svc = new InfrastructureService(makePool([]), makeMetrics({}));
+    const svc = new RpcOverviewService(makePool([]), makeMetrics({}));
 
     const snap = await svc.getSnapshot();
 
@@ -94,7 +94,7 @@ describe("InfrastructureService", () => {
   });
 
   it("derives a cache hit rate per method", async () => {
-    const svc = new InfrastructureService(
+    const svc = new RpcOverviewService(
       makePool([]),
       makeMetrics({
         neko_rpc_cache_total: [
@@ -118,7 +118,7 @@ describe("InfrastructureService", () => {
   });
 
   it("orders failovers by how often they happened", async () => {
-    const svc = new InfrastructureService(
+    const svc = new RpcOverviewService(
       makePool([]),
       makeMetrics({
         neko_rpc_failover_total: [

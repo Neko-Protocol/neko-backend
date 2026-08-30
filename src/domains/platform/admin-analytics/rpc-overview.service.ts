@@ -32,7 +32,7 @@ export interface FailoverEvent {
   count: number;
 }
 
-export interface InfrastructureSnapshot {
+export interface RpcOverview {
   endpoints: EndpointSnapshot[];
   usableCount: number;
   byMethod: MethodUsage[];
@@ -58,7 +58,7 @@ function rate(part: number, whole: number): number | null {
 }
 
 @Injectable()
-export class InfrastructureService {
+export class RpcOverviewService {
   constructor(
     private readonly pool: RpcPoolService,
     private readonly metrics: MetricsRegistryService
@@ -72,7 +72,7 @@ export class InfrastructureService {
    * Grafana sees without a second source of truth — and without the dashboard
    * having to be exposed publicly to be looked at.
    */
-  async getSnapshot(): Promise<InfrastructureSnapshot> {
+  async getSnapshot(): Promise<RpcOverview> {
     const metrics = await this.metrics.registry.getMetricsAsJSON();
     const samples = (name: string): Sample[] =>
       ((metrics.find((m) => m.name === name)?.values ?? []) as Sample[]).map(
@@ -150,7 +150,7 @@ export class InfrastructureService {
       .sort((a, b) => b.hit + b.miss - (a.hit + a.miss));
   }
 
-  private totals(samples: Sample[]): InfrastructureSnapshot["totals"] {
+  private totals(samples: Sample[]): RpcOverview["totals"] {
     let ok = 0;
     let error = 0;
     for (const s of samples) {
