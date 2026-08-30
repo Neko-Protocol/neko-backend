@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ReferralsService } from "../referrals/referrals.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { UsersService } from "./users.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 
 jest.mock("@supabase/supabase-js");
 
@@ -117,17 +118,26 @@ describe("UsersService", () => {
     } as never);
   });
 
+  /** emit() is fire-and-forget from these services, so a no-op stands in for it. */
+  function makeNotifications(): NotificationsService {
+    return {
+      emit: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationsService;
+  }
+
   function buildService(
     configOverrides: Record<string, string | undefined> = {},
     db = chainableFrom({}),
     referrals: ReferralsService = {
       attribute: jest.fn().mockResolvedValue(undefined),
+      confirmPending: jest.fn().mockResolvedValue(undefined),
     } as unknown as ReferralsService
   ) {
     return new UsersService(
       makeSupabaseService(db),
       makeConfigService(configOverrides),
-      referrals
+      referrals,
+      makeNotifications()
     );
   }
 
