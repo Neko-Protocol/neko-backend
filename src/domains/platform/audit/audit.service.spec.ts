@@ -134,7 +134,7 @@ describe("AuditService read methods", () => {
     const svc = makeService({ error: null }, calls);
     const res = await svc.record({
       wallet_address: "GABC",
-      action_type: "activation_payout",
+      action_type: "vaults_deposit",
       asset_in: "XLM",
       token_amount_in: 10,
       amount_in: 2.5,
@@ -145,7 +145,7 @@ describe("AuditService read methods", () => {
     expect(insert).toBeDefined();
     const row = insert!.args[0] as Record<string, unknown>;
     expect(row.wallet_address).toBe("GABC");
-    expect(row.action_type).toBe("activation_payout");
+    expect(row.action_type).toBe("vaults_deposit");
     expect(row.network).toBe("mainnet");
     expect(row.asset_out).toBeNull();
   });

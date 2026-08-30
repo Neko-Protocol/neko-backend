@@ -69,11 +69,9 @@ describe("AdminVaultReportingService", () => {
     it("returns native XLM and Circle-USDC balances, converted to USD", async () => {
       const service = makeService({
         dashboard: {
-          getPrices: jest
-            .fn()
-            .mockResolvedValue({
-              prices: { XLM: { price: 0.2 }, USDC: { price: 1 } },
-            }),
+          getPrices: jest.fn().mockResolvedValue({
+            prices: { XLM: { price: 0.2 }, USDC: { price: 1 } },
+          }),
         },
         stellar: {
           horizon: {
@@ -115,11 +113,9 @@ describe("AdminVaultReportingService", () => {
     it("ignores a USDC-code trustline from a different (non-Circle) issuer", async () => {
       const service = makeService({
         dashboard: {
-          getPrices: jest
-            .fn()
-            .mockResolvedValue({
-              prices: { XLM: { price: 0.2 }, USDC: { price: 1 } },
-            }),
+          getPrices: jest.fn().mockResolvedValue({
+            prices: { XLM: { price: 0.2 }, USDC: { price: 1 } },
+          }),
         },
         stellar: {
           horizon: {

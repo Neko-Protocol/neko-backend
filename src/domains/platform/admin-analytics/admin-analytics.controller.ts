@@ -3,13 +3,15 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminStatsService } from "./admin-stats.service";
 import { AdminVaultReportingService } from "./admin-vault-reporting.service";
 import { ListTransactionsQueryDto } from "./dto/list-transactions-query.dto";
+import { RpcOverviewService } from "./rpc-overview.service";
 
 @ApiTags("admin-analytics")
 @Controller("admin-analytics")
 export class AdminAnalyticsController {
   constructor(
     private readonly stats: AdminStatsService,
-    private readonly vaultReporting: AdminVaultReportingService
+    private readonly vaultReporting: AdminVaultReportingService,
+    private readonly rpcOverview: RpcOverviewService
   ) {}
 
   @Get("overview")
@@ -64,5 +66,14 @@ export class AdminAnalyticsController {
       limit: Number.isFinite(limit) ? limit : 25,
       offset: Number.isFinite(offset) ? offset : 0,
     });
+  }
+
+  @Get("rpc")
+  @ApiOperation({
+    summary:
+      "Live RPC pool state and the counters behind the Grafana dashboard.",
+  })
+  getRpcOverview() {
+    return this.rpcOverview.getSnapshot();
   }
 }
