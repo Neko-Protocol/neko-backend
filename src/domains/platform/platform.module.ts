@@ -1,5 +1,4 @@
 import { Module } from "@nestjs/common";
-import { ActivationsModule } from "./activations/activations.module";
 import { AdminAnalyticsModule } from "./admin-analytics/admin-analytics.module";
 import { AdminAuthModule } from "./admin-auth/admin-auth.module";
 import { AuditModule } from "./audit/audit.module";
@@ -13,7 +12,6 @@ import { UsersModule } from "./users/users.module";
     UsersModule,
     DashboardModule,
     ReferralsModule,
-    ActivationsModule,
     AuditModule,
     AdminAuthModule,
     AdminAnalyticsModule,
