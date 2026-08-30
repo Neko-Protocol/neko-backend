@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Redis from "ioredis";
+import { decode, encode } from "./cache-codec";
 
 const CONNECT_TIMEOUT_MS = 3_000;
 /**
@@ -160,7 +161,7 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
     try {
       const raw = await withTimeout(this.client.get(key), OP_TIMEOUT_MS);
       if (raw === null || raw === undefined) return undefined;
-      return JSON.parse(raw) as T;
+      return decode<T>(raw);
     } catch {
       return undefined;
     }
@@ -169,8 +170,16 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
   private async write(key: string, value: unknown, ttlMs: number) {
     if (!this.client) return;
     try {
-      const payload = JSON.stringify(value);
-      if (payload === undefined) return;
+      // encode() returns null for anything it cannot round-trip faithfully.
+      // Skipping the write is the safe outcome: the caller refetches, rather
+      // than being handed a value that looks right and is not.
+      const payload = encode(value);
+      if (payload === null) {
+        this.logger.debug(
+          `Value for ${key} is not safely serializable; skipping cache write.`
+        );
+        return;
+      }
       await withTimeout(
         this.client.set(key, payload, "PX", ttlMs),
         OP_TIMEOUT_MS
