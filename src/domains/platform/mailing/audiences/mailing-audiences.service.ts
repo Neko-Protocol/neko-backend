@@ -138,6 +138,29 @@ export class MailingAudiencesService {
     }
   }
 
+  /**
+   * True when the address is an active admin. Used to attribute created_by to a
+   * real admin_emails row rather than a free-text string.
+   */
+  async isActiveAdmin(email: string): Promise<boolean> {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return false;
+    const { data, error } = await this.supabase.client
+      .from("admin_emails")
+      .select("email")
+      .eq("email", normalized)
+      .eq("is_active", true)
+      .maybeSingle();
+    return !error && data != null;
+  }
+
+  /** Returns the address only if it maps to an active admin, else null. */
+  async resolveCreatedBy(email?: string | null): Promise<string | null> {
+    if (!email) return null;
+    const normalized = email.trim().toLowerCase();
+    return (await this.isActiveAdmin(normalized)) ? normalized : null;
+  }
+
   async getCount(audience: AudienceId): Promise<number> {
     const recipients = await this.getRecipients(audience);
     return recipients.length;
@@ -145,7 +168,7 @@ export class MailingAudiencesService {
 
   /**
    * Recipients minus anyone who has opted out. Broadcasts and automations must
-   * both honour this — an opt-out is a standing instruction, not a per-send
+   * both honour this. An opt-out is a standing instruction, not a per-send
    * preference. Admin-list recipients have no wallet and so are never filtered.
    */
   async getSendableRecipients(audience: AudienceId): Promise<Recipient[]> {
