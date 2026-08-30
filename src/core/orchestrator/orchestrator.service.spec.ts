@@ -39,6 +39,8 @@ describe("OrchestratorService", () => {
                 "Public Global Stellar Network ; September 2015",
               STELLAR_RPC_URL: "https://soroban-mainnet.example/rpc",
               STELLAR_HORIZON_URL: "https://horizon-mainnet.example",
+              INTERNAL_API_KEY: "k".repeat(32),
+              PORT: 4000,
             }),
           ],
         }),
@@ -59,12 +61,15 @@ describe("OrchestratorService", () => {
     const { server, ...network } = cfg.network;
     expect(network).toEqual({
       id: "PUBLIC",
-      rpcUrl: "https://soroban-mainnet.example/rpc",
+      // The app's own passthrough, not a provider: consumers that cannot take
+      // a client still reach the pool through it.
+      rpcUrl: "http://127.0.0.1:4000/v1/rpc",
       passphrase: "Public Global Stellar Network ; September 2015",
       horizonUrl: "https://horizon-mainnet.example",
-      allowHttp: false,
+      allowHttp: true,
+      rpcHeaders: { "X-Internal-Key": "k".repeat(32) },
     });
-    // Adapters must receive the pool rather than fall back to the URL.
+    // Adapters that can take a client must get the pool, not the URL.
     expect(server).toBeDefined();
     expect(cfg.contractToCodeMap).toEqual({});
 
@@ -86,6 +91,8 @@ describe("OrchestratorService", () => {
           load: [
             () => ({
               STELLAR_NETWORK: "testnet",
+              INTERNAL_API_KEY: "k".repeat(32),
+              PORT: 4000,
               STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
               STELLAR_RPC_URL: "http://localhost:8000/rpc",
             }),
