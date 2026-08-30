@@ -45,8 +45,41 @@ export async function sendTx(
   preparedTx.sign(keypair);
   const sendResult = await server.sendTransaction(preparedTx);
   if (sendResult.status !== "PENDING") {
-    return { hash: sendResult.hash ?? "", status: "submit_error" };
+    // The keeper runs unattended on a cron, so "submit_error" alone leaves
+    // nothing to diagnose from. Surface the network's own reason —
+    // txBadSeq, txInsufficientFee and so on — which is the difference
+    // between knowing what happened and not.
+    return {
+      hash: sendResult.hash ?? "",
+      status: `submit_error: ${describeSubmitFailure(sendResult)}`,
+    };
   }
   const finalStatus = await waitForTx(server, sendResult.hash);
   return { hash: sendResult.hash, status: finalStatus };
+}
+
+/**
+ * Extracts a readable reason from a rejected submission. The SDK exposes it
+ * either as a decoded errorResult or as raw XDR depending on the response, and
+ * neither is typed, so both are probed defensively — a failure to explain the
+ * failure must not itself throw.
+ */
+function describeSubmitFailure(sendResult: unknown): string {
+  const result = sendResult as {
+    status?: unknown;
+    errorResult?: { result?: () => { switch?: () => { name?: string } } };
+    errorResultXdr?: unknown;
+  };
+
+  let reason: string | null = null;
+  try {
+    reason = result.errorResult?.result?.()?.switch?.()?.name ?? null;
+  } catch {
+    reason = null;
+  }
+  if (!reason && typeof result.errorResultXdr === "string") {
+    reason = result.errorResultXdr;
+  }
+
+  return JSON.stringify({ status: result.status ?? "unknown", reason });
 }
