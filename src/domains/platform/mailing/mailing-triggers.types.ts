@@ -26,12 +26,6 @@ export const TRIGGER_TYPES = [
     description:
       "Fires when a referred wallet's referral status becomes confirmed.",
   },
-  {
-    id: "activation_paid",
-    label: "Activation reward paid",
-    description:
-      "Fires when an activation participant's payout status becomes paid.",
-  },
 ] as const;
 
 export type TriggerType = (typeof TRIGGER_TYPES)[number]["id"];
