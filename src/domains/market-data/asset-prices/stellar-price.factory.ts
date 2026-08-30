@@ -1,4 +1,6 @@
 import { Logger } from "@nestjs/common";
+import { rpc } from "@stellar/stellar-sdk";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { ConfigService } from "@nestjs/config";
 import {
   StellarPriceService,
@@ -18,6 +20,7 @@ function buildReflectorClient(
   network: string,
   passphrase: string,
   rpcUrl: string,
+  server: rpc.Server,
   logger: Logger
 ): ReflectorClientType | null {
   const upper = network.toUpperCase();
@@ -29,6 +32,10 @@ function buildReflectorClient(
       contractId: REFLECTOR_CONTRACT_ID,
       networkPassphrase: passphrase,
       rpcUrl,
+      // Oracle reads go through the pool like everything else. This one
+      // matters most: getReflectorUsdPrice catches and returns 0, so a
+      // provider outage here does not raise — prices quietly change source.
+      server,
     });
   } catch (err) {
     logger.warn(
@@ -39,7 +46,8 @@ function buildReflectorClient(
 }
 
 export function createStellarPriceService(
-  config: ConfigService
+  config: ConfigService,
+  stellarRpc: StellarRpcService
 ): StellarPriceService {
   const logger = new Logger("StellarPriceServiceFactory");
 
@@ -48,17 +56,34 @@ export function createStellarPriceService(
   const rpcUrl = config.get<string>("STELLAR_RPC_URL") ?? "";
   const networkId = getCurrentNetworkId(stellarNetwork);
 
-  const reflectorClient = buildReflectorClient(
-    stellarNetwork,
-    passphrase,
-    rpcUrl,
-    logger
-  );
-  if (!reflectorClient) {
-    logger.warn(
-      `Reflector client unavailable for network=${stellarNetwork}; prices will fall back to xBull Swap/CoinGecko.`
-    );
-  }
+  /**
+   * Built on first use, not here.
+   *
+   * This factory runs while providers are being constructed, and the pool
+   * proxy does not exist until StellarRpcService's onModuleInit. Reading it
+   * now yields undefined, the SDK quietly falls back to the single-endpoint
+   * URL, and the oracle ends up off the pool again — with nothing to show for
+   * it, because a failed oracle read returns 0 and the price chain moves on to
+   * the next source.
+   */
+  let reflectorClient: ReflectorClientType | null | undefined;
+  const getReflectorClient = () => {
+    if (reflectorClient === undefined) {
+      reflectorClient = buildReflectorClient(
+        stellarNetwork,
+        passphrase,
+        rpcUrl,
+        stellarRpc.rpc,
+        logger
+      );
+      if (!reflectorClient) {
+        logger.warn(
+          `Reflector client unavailable for network=${stellarNetwork}; prices will fall back to xBull Swap/CoinGecko.`
+        );
+      }
+    }
+    return reflectorClient;
+  };
 
   const deps: StellarPriceServiceDeps = {
     getSwapKitUsdPrice: async (contractAddress, decimals) => {
@@ -80,7 +105,7 @@ export function createStellarPriceService(
         return 0;
       }
     },
-    getReflectorClient: () => reflectorClient,
+    getReflectorClient,
     getAssetConfig: (code: string) => getAssetsConfig(networkId)[code],
   };
 

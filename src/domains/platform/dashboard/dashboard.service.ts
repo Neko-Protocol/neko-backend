@@ -297,6 +297,10 @@ export class DashboardService {
         const client = new DefindexVaultClient({
           contractId: vaultId,
           rpcUrl,
+          // Routed through the pool, so this read gets the same health-aware
+          // selection, retry and failover as everything else. `rpcUrl` stays
+          // as the fallback the SDK uses only if no server is supplied.
+          server: this.stellar.rpc,
           networkPassphrase: passphrase,
           ...(allowHttp ? { allowHttp: true } : {}),
         });
@@ -348,6 +352,7 @@ export class DashboardService {
           const client = new DefindexVaultClient({
             contractId: vaultId,
             rpcUrl,
+            server: this.stellar.rpc,
             networkPassphrase: passphrase,
             ...(allowHttp ? { allowHttp: true } : {}),
           });

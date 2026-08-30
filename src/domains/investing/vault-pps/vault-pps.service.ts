@@ -4,6 +4,7 @@ import { Client as DefindexVaultClient } from "@neko/defindex-vault";
 import { parseAllVaultIds } from "@neko/keeper";
 import { fetchManagedFunds } from "../vault-invest/keeper/tx";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 
 export interface RecordPpsResult {
   inserted: number;
@@ -49,7 +50,8 @@ export class VaultPpsService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly supabase: SupabaseService
+    private readonly supabase: SupabaseService,
+    private readonly stellar: StellarRpcService
   ) {
     this.rpcUrl = config.getOrThrow<string>("STELLAR_RPC_URL");
     this.networkPassphrase = config.getOrThrow<string>(
@@ -67,6 +69,10 @@ export class VaultPpsService {
         const client = new DefindexVaultClient({
           contractId: vaultId,
           rpcUrl: this.rpcUrl,
+          // Routed through the pool, so this read gets the same health-aware
+          // selection, retry and failover as everything else. `rpcUrl` stays
+          // as the fallback the SDK uses only if no server is supplied.
+          server: this.stellar.rpc,
           networkPassphrase: this.networkPassphrase,
           ...(this.allowHttp ? { allowHttp: true } : {}),
         });

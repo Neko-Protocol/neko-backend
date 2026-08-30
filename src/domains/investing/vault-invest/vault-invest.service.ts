@@ -301,6 +301,7 @@ export class VaultInvestService {
     const client = new DefindexVaultClient({
       contractId: config.vaultId,
       rpcUrl: this.rpcUrl,
+      server: this.stellar.rpc,
       networkPassphrase: this.networkPassphrase,
       publicKey: keypair.publicKey(),
     });
