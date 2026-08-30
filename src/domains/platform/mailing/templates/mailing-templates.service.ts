@@ -4,13 +4,17 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { MailingAudiencesService } from "../audiences/mailing-audiences.service";
 import { CreateMailingTemplateDto } from "./dto/create-mailing-template.dto";
 import { UpdateMailingTemplateDto } from "./dto/update-mailing-template.dto";
 import { MailingTemplate } from "./mailing-templates.types";
 
 @Injectable()
 export class MailingTemplatesService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly audiences: MailingAudiencesService
+  ) {}
 
   private mapRow(row: Record<string, unknown>): MailingTemplate | null {
     const id = typeof row.id === "string" ? row.id : null;
@@ -66,7 +70,7 @@ export class MailingTemplatesService {
         name,
         subject,
         body_html: body.body_html,
-        created_by: "admin",
+        created_by: await this.audiences.resolveCreatedBy(body.created_by),
       })
       .select("*")
       .maybeSingle();
