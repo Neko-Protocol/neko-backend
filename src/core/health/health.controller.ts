@@ -5,6 +5,7 @@ import { SkipThrottle } from "@nestjs/throttler";
 import { SkipAuth } from "../../common/decorators/skip-auth.decorator";
 import { SorobanRpcHealthIndicator } from "./indicators/soroban-rpc.health";
 import { HorizonHealthIndicator } from "./indicators/horizon.health";
+import { RedisCacheHealthIndicator } from "./indicators/redis-cache.health";
 
 @ApiTags("health")
 @Controller({ path: "health", version: VERSION_NEUTRAL })
@@ -14,7 +15,8 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly soroban: SorobanRpcHealthIndicator,
-    private readonly horizon: HorizonHealthIndicator
+    private readonly horizon: HorizonHealthIndicator,
+    private readonly redis: RedisCacheHealthIndicator
   ) {}
 
   @Get("liveness")
@@ -33,6 +35,7 @@ export class HealthController {
     return this.health.check([
       () => this.soroban.isHealthy("soroban_rpc"),
       () => this.horizon.isHealthy("horizon"),
+      () => this.redis.isHealthy("redis_cache"),
     ]);
   }
 
