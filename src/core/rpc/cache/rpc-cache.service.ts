@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { rpc } from "@stellar/stellar-sdk";
+import { rpc, xdr } from "@stellar/stellar-sdk";
 import { createHash } from "crypto";
 import { RedisCacheService } from "../../cache/redis-cache.service";
 
@@ -45,7 +45,12 @@ const RAW_PLANS: Record<string, RawCachePlan> = {
     kind: "raw",
     rawMethod: "_simulateTransaction",
     parse: rpc.parseRawSimulation as (raw: never) => unknown,
-    ttlMs: 5_000,
+    // Longer than it looks: a wallet's own transaction moves its sequence
+    // number, which changes the envelope and drops its entries without any
+    // invalidation. So this window only ever hides a balance that changed
+    // without the wallet acting — someone sending it tokens — and the browser
+    // already holds balances for 60s, twice as long.
+    ttlMs: 30_000,
   },
   getEvents: {
     kind: "raw",
@@ -106,9 +111,43 @@ export class RpcCacheService {
 
   buildKey(method: string, args: unknown[]): string {
     const digest = createHash("sha256")
-      .update(stableStringify(args))
+      .update(stableStringify(this.normalize(method, args)))
       .digest("hex");
     return `rpc:${method}:${digest}`;
+  }
+
+  /**
+   * Strips a simulated transaction's validity window before it is hashed.
+   *
+   * `TransactionBuilder.setTimeout(n)` bakes `now + n` into the envelope, so
+   * two identical balance reads a second apart serialised differently and
+   * hashed to different keys. The entry could therefore never be reused: the
+   * pool reported 0 hits against 373 misses, every one of them a
+   * simulateTransaction, which is the method this cache exists for.
+   *
+   * Dropping the window is safe because a simulation's result does not depend
+   * on when the transaction would be valid — it is never submitted. Source,
+   * sequence, fee and operations all still key the entry, so two different
+   * reads can never collide, and a wallet that transacts busts its own entries
+   * for free because its sequence number moves.
+   */
+  private normalize(method: string, args: unknown[]): unknown[] {
+    if (method !== "simulateTransaction") return args;
+    const [params] = args;
+    if (typeof params !== "object" || params === null) return args;
+    const envelope = (params as { transaction?: unknown }).transaction;
+    if (typeof envelope !== "string") return args;
+
+    try {
+      const parsed = xdr.TransactionEnvelope.fromXDR(envelope, "base64");
+      if (parsed.switch().name !== "envelopeTypeTx") return args;
+      parsed.v1().tx().cond(xdr.Preconditions.precondNone());
+      return [{ ...params, transaction: parsed.toXDR("base64") }];
+    } catch {
+      // An envelope we cannot parse still deserves a key — just the old,
+      // exact one. A cache must never turn a readable request into an error.
+      return args;
+    }
   }
 
   /**

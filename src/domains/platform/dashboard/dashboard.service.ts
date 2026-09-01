@@ -23,7 +23,19 @@ import type {
   DashboardVaultPosition,
 } from "./dashboard.types";
 
-const TTL_POSITIONS_MS = 30_000;
+/**
+ * Two minutes, not thirty seconds.
+ *
+ * The dashboard polls this every 60s, so a 30s window guaranteed every poll
+ * arrived just after the entry expired — the cache never once served a refresh,
+ * only concurrent duplicates. At two minutes every other poll is a hit and the
+ * recomputation halves.
+ *
+ * Safe to hold this long only because a wallet's entry is dropped the moment
+ * it submits a transaction (see TransactionService). Without that, a deposit
+ * would stay invisible for the whole window.
+ */
+const TTL_POSITIONS_MS = 120_000;
 const TTL_POOL_CATALOG_MS = 5 * 60_000;
 const TTL_PRICES_MS = 60_000;
 
@@ -160,7 +172,25 @@ export class DashboardService {
     });
   }
 
-  private async loadPoolCatalog(): Promise<DashboardPoolCatalogResponse> {
+  /**
+   * The Blend and Aqua catalogues, cached once for everyone.
+   *
+   * Which pools exist has nothing to do with who is asking, but the positions
+   * lookup used to fetch them itself, inside a cache keyed by wallet. So the
+   * catalogue was rebuilt for every wallet — and again 30 seconds later — even
+   * though this shared five-minute entry already held it. It is the slowest
+   * part of a cold positions call and the part least likely to have changed.
+   *
+   * Cached in its raw form, bigint `tvl` and all: the codec tags BigInt and
+   * rebuilds it, and the position lookups need the pools unserialized.
+   */
+  private getPools(): Promise<{ blend: PoolInfo[]; aqua: PoolInfo[] }> {
+    return this.cache.getOrFetch("pools-raw", TTL_POOL_CATALOG_MS, () =>
+      this.loadPools()
+    );
+  }
+
+  private async loadPools(): Promise<{ blend: PoolInfo[]; aqua: PoolInfo[] }> {
     const orchestrator = this.orchestratorSvc.orchestrator;
     const [blend, aqua] = await Promise.all([
       orchestrator
@@ -180,7 +210,11 @@ export class DashboardService {
           return [] as PoolInfo[];
         }),
     ]);
+    return { blend, aqua };
+  }
 
+  private async loadPoolCatalog(): Promise<DashboardPoolCatalogResponse> {
+    const { blend, aqua } = await this.getPools();
     return {
       blend: blend.map(serializePool),
       aqua: aqua.map(serializePool),
@@ -191,10 +225,31 @@ export class DashboardService {
   private async loadPositions(
     wallet: string
   ): Promise<DashboardPositionsResponse> {
+    // Timed per half because this is the slowest endpoint the dashboard calls
+    // and the two halves are wildly uneven — without the split the only signal
+    // is one number that says "three seconds" and nothing about where.
+    const started = Date.now();
+    let poolMs = 0;
+    let vaultMs = 0;
+
     const [poolEntries, vaultPositions] = await Promise.all([
-      this.loadPoolPositions(wallet),
-      this.loadVaultPositions(wallet),
+      this.loadPoolPositions(wallet).then((r) => {
+        poolMs = Date.now() - started;
+        return r;
+      }),
+      // The cached vault-only entry, which the dedicated endpoint also serves.
+      // Going through the cache means the vault half is computed once per
+      // wallet no matter which of the two endpoints asked for it first.
+      this.getVaultPositions(wallet).then((r) => {
+        vaultMs = Date.now() - started;
+        return r;
+      }),
     ]);
+
+    this.logger.debug(
+      `[dashboard] positions ${wallet.slice(0, 6)}… pools=${poolMs}ms vaults=${vaultMs}ms`
+    );
+
     return {
       poolPositions: poolEntries,
       vaultPositions,
@@ -206,39 +261,56 @@ export class DashboardService {
     wallet: string
   ): Promise<DashboardPoolPositionEntry[]> {
     const orchestrator = this.orchestratorSvc.orchestrator;
+    const startedAt = Date.now();
 
-    const [blendPools, aquaPools, blendPositions] = await Promise.all([
-      orchestrator
-        .getPoolsByType("blend", POOL_CATALOG_LIMITS.blend)
-        .catch((e: Error) => {
-          this.logger.warn(`[dashboard] blend pools failed: ${e.message}`);
-          return [] as PoolInfo[];
-        }),
-      orchestrator
-        .getPoolsByType("aqua", POOL_CATALOG_LIMITS.aqua)
-        .catch((e: Error) => {
-          this.logger.warn(`[dashboard] aqua pools failed: ${e.message}`);
-          return [] as PoolInfo[];
-        }),
-      orchestrator.getAllBlendUserPositions(wallet).catch((e: Error) => {
+    // The catalogue comes from the shared cache; only the position lookups are
+    // actually about this wallet.
+    const poolsPromise = this.getPools();
+
+    // Blend and Aqua are independent: Blend asks the protocol directly, while
+    // Aqua needs the catalogue, then an LP screen, then one lookup per pool
+    // that survived it. Awaiting both branches together used to stall the Aqua
+    // chain behind the Blend call for no reason — the screen only ever needed
+    // the catalogue. Started separately, the two run concurrently and the
+    // endpoint costs the slower branch instead of their sum.
+    const blendBranch = orchestrator
+      .getAllBlendUserPositions(wallet)
+      .catch((e: Error) => {
         this.logger.warn(`[dashboard] blend positions failed: ${e.message}`);
         return [] as PoolPosition[];
-      }),
-    ]);
+      })
+      .then((positions) => {
+        this.logger.debug(
+          `[dashboard] blend branch ${Date.now() - startedAt}ms`
+        );
+        return positions;
+      });
 
-    const nonBlendPools = aquaPools;
-    const lpPoolIds =
-      nonBlendPools.length > 0
-        ? await batchCheckLpBalances(this.stellar.rpc, nonBlendPools, wallet)
-        : new Set<string>();
-    const candidatePools = nonBlendPools.filter((p) => lpPoolIds.has(p.id));
+    const aquaBranch = poolsPromise.then(async ({ aqua }) => {
+      const lpPoolIds =
+        aqua.length > 0
+          ? await batchCheckLpBalances(this.stellar.rpc, aqua, wallet)
+          : new Set<string>();
+      const candidates = aqua.filter((p) => lpPoolIds.has(p.id));
+      const afterScreen = Date.now();
 
-    const nonBlendPositions = await Promise.allSettled(
-      candidatePools.map(async (pool) => ({
-        pool,
-        position: await orchestrator.getUserPosition(pool.id, wallet),
-      }))
-    );
+      const settled = await Promise.allSettled(
+        candidates.map(async (pool) => ({
+          pool,
+          position: await orchestrator.getUserPosition(pool.id, wallet),
+        }))
+      );
+
+      this.logger.debug(
+        `[dashboard] aqua branch screen=${afterScreen - startedAt}ms ` +
+          `(${candidates.length}/${aqua.length} candidates) ` +
+          `positions=${Date.now() - afterScreen}ms`
+      );
+      return settled;
+    });
+
+    const [{ blend: blendPools }, blendPositions, nonBlendPositions] =
+      await Promise.all([poolsPromise, blendBranch, aquaBranch]);
 
     const blendEntries: DashboardPoolPositionEntry[] = blendPositions
       .filter((pos) => {
