@@ -29,6 +29,20 @@ import {
 } from "@neko/orchestrator";
 import type { Network } from "@blend-capital/blend-sdk";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { RedisCacheService } from "@core/cache/redis-cache.service";
+
+/**
+ * A vault's APY is a slow figure — DeFindex reports it over days, Blend supply
+ * rates drift over hours — so five minutes of staleness is invisible. It also
+ * matches the staleTime the dashboard already keeps, so the cache expires at
+ * roughly the cadence the client asks again.
+ *
+ * What it buys is large: answering this endpoint means an external DeFindex
+ * call plus, for Blend-backed vaults, loading the pool and computing emissions
+ * over several RPC round trips. The dashboard asks for every vault at once, so
+ * the uncached cost scaled with the catalogue on every single page load.
+ */
+const APY_CACHE_TTL_MS = 5 * 60_000;
 
 function mapNetworkId(raw: string): StellarNetworkId {
   const n = raw.trim().toUpperCase();
@@ -109,7 +123,8 @@ export class VaultApyService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly stellar: StellarRpcService
+    private readonly stellar: StellarRpcService,
+    private readonly cache: RedisCacheService
   ) {
     this.stellarNetwork =
       this.config.get<string>("STELLAR_NETWORK") ?? "mainnet";
@@ -311,6 +326,25 @@ export class VaultApyService {
       };
     }
 
+    const key = `vault-apy:${this.stellarNetwork}:${vaultId}`;
+    const { value } = await this.cache.through(key, APY_CACHE_TTL_MS, () =>
+      this.computeVaultApy(vaultId)
+    );
+
+    // A null APY means every source came back empty — normally an outage at
+    // DeFindex or Blend rather than a vault that truly earns nothing. Holding
+    // that for five minutes would pin a dash on the dashboard long after the
+    // upstream recovered, so it is dropped and the next caller retries.
+    // Callers arriving during the computation still shared one call: `through`
+    // coalesces them before this runs.
+    if (value.vaultApy === null) {
+      await this.cache.invalidate(key);
+    }
+
+    return value;
+  }
+
+  private async computeVaultApy(vaultId: string): Promise<VaultApyResult> {
     // For all vaults, try the DeFindex SDK APY first.
     const defindexApy = await this.getDefindexVaultApy(vaultId);
 
