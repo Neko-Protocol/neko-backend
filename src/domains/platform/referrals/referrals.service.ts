@@ -7,6 +7,7 @@ import {
 import { randomBytes } from "crypto";
 import { ErrorCode } from "@neko/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
@@ -38,7 +39,10 @@ export interface ReferredUser {
 export class ReferralsService {
   private readonly logger = new Logger(ReferralsService.name);
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly notifications: NotificationsService
+  ) {}
 
   private generateCode(): string {
     const bytes = randomBytes(CODE_LENGTH);
@@ -127,11 +131,17 @@ export class ReferralsService {
     }
   }
 
-  /** Promotes pending referrals whose referred user has verified their email. */
-  private async confirmPending(referrerWallet?: string): Promise<void> {
+  /**
+   * Promotes pending referrals whose referred user has verified their email.
+   *
+   * Public because email verification is the causal event: UsersService calls
+   * this the moment a wallet's address is confirmed, rather than leaving
+   * confirmation to whenever someone happens to load the referral page.
+   */
+  async confirmPending(referrerWallet?: string): Promise<void> {
     let query = this.supabase.client
       .from("referrals")
-      .select("id, referred_wallet")
+      .select("id, referrer_wallet, referred_wallet")
       .eq("status", "pending");
     if (referrerWallet) query = query.eq("referrer_wallet", referrerWallet);
 
@@ -163,13 +173,31 @@ export class ReferralsService {
       .map((row) => row.id);
     if (!confirmable.length) return;
 
-    const { error: updateError } = await this.supabase.client
+    // Returning the affected rows is what makes notifying safe: the
+    // `.eq("status", "pending")` guard means a concurrent caller can only flip
+    // each row once, so whoever gets it back is the one that flipped it.
+    const { data: confirmed, error: updateError } = await this.supabase.client
       .from("referrals")
       .update({ status: "confirmed", confirmed_at: new Date().toISOString() })
       .in("id", confirmable)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("id, referrer_wallet");
     if (updateError) {
       this.logger.error(`confirmPending update failed: ${updateError.message}`);
+      return;
+    }
+
+    // The referrer is the one who earns something here, so they are the one
+    // who gets told.
+    for (const row of confirmed ?? []) {
+      const referrer =
+        typeof row.referrer_wallet === "string" ? row.referrer_wallet : "";
+      if (!referrer) continue;
+      await this.notifications.emit({
+        trigger: "referral_confirmed",
+        walletAddress: referrer,
+        dedupeKey: `referral:${row.id}`,
+      });
     }
   }
 
