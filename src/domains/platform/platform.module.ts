@@ -5,6 +5,7 @@ import { AdminEmailsModule } from "./admin-emails/admin-emails.module";
 import { AuditModule } from "./audit/audit.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { MailingModule } from "./mailing/mailing.module";
+import { ReferralPartnersModule } from "./referral-partners/referral-partners.module";
 import { ReferralsModule } from "./referrals/referrals.module";
 import { UsersModule } from "./users/users.module";
 
@@ -13,6 +14,7 @@ import { UsersModule } from "./users/users.module";
     UsersModule,
     DashboardModule,
     ReferralsModule,
+    ReferralPartnersModule,
     AuditModule,
     AdminAuthModule,
     AdminAnalyticsModule,
