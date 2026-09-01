@@ -17,6 +17,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
 import { PreparedTxCache } from "./cache/prepared-tx-cache";
+import { DashboardCache } from "@domains/platform/dashboard/cache/dashboard-cache";
 import { TransactionService } from "./transaction.service";
 import { XdrValidator } from "./validation/xdr-validator";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
@@ -112,6 +113,7 @@ describe("TransactionService", () => {
   let validator: XdrValidator;
   let mapper: SorobanErrorMapper;
   let service: TransactionService;
+  let dashboardCache: { invalidate: jest.Mock };
   let originalNodeEnv: string | undefined;
 
   beforeAll(() => {
@@ -123,7 +125,16 @@ describe("TransactionService", () => {
     cache = new PreparedTxCache();
     validator = new XdrValidator(rpcMock.service);
     mapper = new SorobanErrorMapper();
-    service = new TransactionService(rpcMock.service, validator, cache, mapper);
+    // The dashboard cache is invalidated after a submit; this suite is about
+    // the submit path itself, so it only has to accept the call.
+    dashboardCache = { invalidate: jest.fn().mockResolvedValue(undefined) };
+    service = new TransactionService(
+      rpcMock.service,
+      validator,
+      cache,
+      mapper,
+      dashboardCache as unknown as DashboardCache
+    );
     originalNodeEnv = process.env.NODE_ENV;
   });
 
@@ -219,6 +230,36 @@ describe("TransactionService", () => {
       expect(result.status).toBe("SUCCESS");
       expect(result.hash).toBe(hash);
       expect(result.traceId).toBeDefined();
+    });
+
+    // A wallet that just moved funds must not be served its pre-transaction
+    // positions; the dashboard cache holds them for two minutes otherwise.
+    it("drops the wallet's cached dashboard positions after a settled submit", async () => {
+      const { xdr, sourceAccount, hash } = buildUnsignedXdr();
+      cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
+      rpcMock.sendTransaction.mockResolvedValue(pendingSendResponse(hash));
+      rpcMock.getTransaction.mockResolvedValue(successResponse());
+
+      await service.submit({ signedXdr: xdr }, IP);
+
+      expect(dashboardCache.invalidate).toHaveBeenCalledWith(
+        `positions:${sourceAccount}`
+      );
+      expect(dashboardCache.invalidate).toHaveBeenCalledWith(
+        `vault-positions:${sourceAccount}`
+      );
+    });
+
+    it("still returns the result when invalidation fails", async () => {
+      const { xdr, sourceAccount, hash } = buildUnsignedXdr();
+      cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
+      rpcMock.sendTransaction.mockResolvedValue(pendingSendResponse(hash));
+      rpcMock.getTransaction.mockResolvedValue(successResponse());
+      dashboardCache.invalidate.mockRejectedValue(new Error("redis down"));
+
+      const result = await service.submit({ signedXdr: xdr }, IP);
+
+      expect(result.status).toBe("SUCCESS");
     });
 
     it("happy path: returnValue is base64-encoded when present", async () => {

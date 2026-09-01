@@ -16,6 +16,7 @@ import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { PreparedTxCache } from "./cache/prepared-tx-cache";
 import { XdrValidator } from "./validation/xdr-validator";
 import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
+import { DashboardCache } from "@domains/platform/dashboard/cache/dashboard-cache";
 import {
   decodeTransactionResultXdr,
   formatDecodedResult,
@@ -41,8 +42,33 @@ export class TransactionService {
     private readonly rpc: StellarRpcService,
     private readonly validator: XdrValidator,
     private readonly cache: PreparedTxCache,
-    private readonly errors: SorobanErrorMapper
+    private readonly errors: SorobanErrorMapper,
+    private readonly dashboardCache: DashboardCache
   ) {}
+
+  /**
+   * Drops this wallet's cached dashboard entries after it moves funds.
+   *
+   * The positions cache is keyed per wallet and read straight through, so
+   * without this a deposit stayed invisible until the entry aged out — the one
+   * moment a user is actually watching for it. Best effort: a failed
+   * invalidation costs staleness, never the transaction, which has already
+   * settled by the time this runs.
+   */
+  private async dropDashboardCache(wallet: string): Promise<void> {
+    try {
+      await Promise.all([
+        this.dashboardCache.invalidate(`positions:${wallet}`),
+        this.dashboardCache.invalidate(`vault-positions:${wallet}`),
+      ]);
+    } catch (err) {
+      this.logger.warn({
+        event: "dashboard_cache_invalidate_failed",
+        wallet,
+        reason: extractMessage(err),
+      });
+    }
+  }
 
   async prepare(
     dto: PrepareTransactionDto,
@@ -165,6 +191,7 @@ export class TransactionService {
         outcome: "duplicate",
         durationMs: Date.now() - start,
       });
+      await this.dropDashboardCache(sourceAccount);
       return { ...status, traceId };
     }
 
@@ -177,6 +204,7 @@ export class TransactionService {
       durationMs: Date.now() - start,
       outcome: result.status === "SUCCESS" ? "ok" : "non_success",
     });
+    await this.dropDashboardCache(sourceAccount);
     return { ...result, traceId };
   }
 
