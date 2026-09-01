@@ -15,6 +15,7 @@ import type {
   DashboardPoolCatalogResponse,
   DashboardPositionsResponse,
   DashboardPricesResponse,
+  DashboardVaultPosition,
 } from "./dashboard.types";
 
 @ApiTags("dashboard")
@@ -35,6 +36,29 @@ export class DashboardController {
       throw new BadRequestException({ code: ErrorCode.INVALID_WALLET });
     }
     return this.svc.getPositions(wallet);
+  }
+
+  /**
+   * The vault half on its own.
+   *
+   * `positions/:wallet` returns both halves together, so the dashboard's whole
+   * positions section waits on the pool lookup — the slow one, several rounds
+   * of on-chain reads per wallet. Vault balances are a fraction of that, and
+   * asking for them separately lets the UI show them while the pools are still
+   * being screened.
+   */
+  @Get("vault-positions/:wallet")
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "Vault positions for a wallet, without the pool lookup.",
+  })
+  getVaultPositions(
+    @Param("wallet") wallet: string
+  ): Promise<DashboardVaultPosition[]> {
+    if (!StrKey.isValidEd25519PublicKey(wallet)) {
+      throw new BadRequestException({ code: ErrorCode.INVALID_WALLET });
+    }
+    return this.svc.getVaultPositions(wallet);
   }
 
   @Get("pool-catalog")

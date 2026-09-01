@@ -1,6 +1,14 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { ReferralsService } from "./referrals.service";
+
+/** emit() is fire-and-forget from these services, so a no-op stands in for it. */
+function makeNotifications(): NotificationsService {
+  return {
+    emit: jest.fn().mockResolvedValue(undefined),
+  } as unknown as NotificationsService;
+}
 
 const WALLET = "GREFERRER";
 const REFERRED = "GREFERRED";
@@ -73,7 +81,7 @@ describe("ReferralsService", () => {
       const db = makeDb({
         referral_codes: [{ data: { code: CODE }, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.getOrCreateCode(WALLET)).resolves.toEqual({
         code: CODE,
@@ -88,7 +96,7 @@ describe("ReferralsService", () => {
           { data: null, error: null },
         ],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       const { code } = await svc.getOrCreateCode(WALLET);
       expect(code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/);
@@ -101,7 +109,7 @@ describe("ReferralsService", () => {
           { data: null, error: { code: "23503", message: "fk" } },
         ],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.getOrCreateCode(WALLET)).rejects.toBeInstanceOf(
         NotFoundException
@@ -115,7 +123,7 @@ describe("ReferralsService", () => {
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
         referrals: [{ data: null, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await svc.attribute({
         code: ` ${CODE.toLowerCase()} `,
@@ -136,7 +144,7 @@ describe("ReferralsService", () => {
       const db = makeDb({
         referral_codes: [{ data: null, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(
         svc.attribute({ code: "NOPE1234", referred_wallet: REFERRED })
@@ -148,7 +156,7 @@ describe("ReferralsService", () => {
       const db = makeDb({
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await svc.attribute({ code: CODE, referred_wallet: WALLET });
       expect(db.calls.filter((c) => c.table === "referrals")).toHaveLength(0);
@@ -159,7 +167,7 @@ describe("ReferralsService", () => {
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
         referrals: [{ data: null, error: { code: "XX000", message: "boom" } }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(
         svc.attribute({ code: CODE, referred_wallet: REFERRED })
@@ -176,7 +184,7 @@ describe("ReferralsService", () => {
         ],
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(
         svc.claim(REFERRED, ` ${CODE.toLowerCase()} `)
@@ -199,7 +207,7 @@ describe("ReferralsService", () => {
       const db = makeDb({
         referrals: [{ data: { id: "existing" }, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.claim(REFERRED, CODE)).rejects.toBeInstanceOf(
         BadRequestException
@@ -212,7 +220,7 @@ describe("ReferralsService", () => {
         referrals: [{ data: null, error: null }],
         referral_codes: [{ data: null, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.claim(REFERRED, "NOPE1234")).rejects.toBeInstanceOf(
         BadRequestException
@@ -224,7 +232,7 @@ describe("ReferralsService", () => {
         referrals: [{ data: null, error: null }],
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.claim(WALLET, CODE)).rejects.toBeInstanceOf(
         BadRequestException
@@ -239,7 +247,7 @@ describe("ReferralsService", () => {
         ],
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.claim(REFERRED, CODE)).rejects.toBeInstanceOf(
         BadRequestException
@@ -256,7 +264,7 @@ describe("ReferralsService", () => {
         ],
         referrals: [{ data: null, error: null }],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await svc.attribute({ code: CODE, referred_wallet: REFERRED });
 
@@ -277,7 +285,7 @@ describe("ReferralsService", () => {
           { data: { id: "partner-1", is_active: false }, error: null },
         ],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await svc.attribute({ code: CODE, referred_wallet: REFERRED });
       expect(db.calls.filter((c) => c.table === "referrals")).toHaveLength(0);
@@ -294,7 +302,7 @@ describe("ReferralsService", () => {
           { data: { id: "partner-1", is_active: true }, error: null },
         ],
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.claim(REFERRED, CODE)).resolves.toEqual({
         code: CODE,
@@ -329,7 +337,7 @@ describe("ReferralsService", () => {
         ],
         error: null,
       });
-      const svc = new ReferralsService(db.supabase);
+      const svc = new ReferralsService(db.supabase, makeNotifications());
 
       await expect(svc.getPartnerLeaderboard()).resolves.toEqual([
         {
