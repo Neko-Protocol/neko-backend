@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -13,16 +14,33 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const CODE_CREATE_RETRIES = 3;
 
+export interface ReferredBy {
+  code: string;
+  status: "pending" | "confirmed";
+}
+
 export interface ReferralMe {
   code: string;
   referred_total: number;
   referred_confirmed: number;
   swap_volume_usd: number;
   vault_tvl_usd: number;
+  referred_by: ReferredBy | null;
 }
 
 export interface ReferralLeaderboardRow {
   referrer_wallet: string;
+  code: string;
+  email: string | null;
+  confirmed_count: number;
+  swap_volume_usd: number;
+  vault_tvl_usd: number;
+}
+
+export interface ReferralPartnerLeaderboardRow {
+  partner_id: string;
+  name: string;
+  type: "company" | "influencer";
   code: string;
   confirmed_count: number;
   swap_volume_usd: number;
@@ -34,6 +52,10 @@ export interface ReferredUser {
   status: string;
   confirmed_at: string | null;
 }
+
+type CodeOwner =
+  | { kind: "wallet"; wallet: string }
+  | { kind: "partner"; partnerId: string };
 
 @Injectable()
 export class ReferralsService {
@@ -99,8 +121,52 @@ export class ReferralsService {
   }
 
   /**
-   * Links a brand-new wallet to the referrer that owns the given code.
-   * Never throws: registration must not fail because of a bad ref code.
+   * Resolves who owns a code: a wallet (self-served, via referral_codes) or
+   * a partner (admin-created, via referral_partners). Checks wallets first
+   * since that's the far more common path. A revoked partner code is
+   * deleted outright (see ReferralPartnersService.remove), so there's no
+   * "inactive but still present" state to filter out here.
+   */
+  private async resolveCodeOwner(code: string): Promise<CodeOwner | null> {
+    const { data: walletOwner } = await this.supabase.client
+      .from("referral_codes")
+      .select("wallet_address")
+      .eq("code", code)
+      .maybeSingle();
+    if (walletOwner?.wallet_address) {
+      return { kind: "wallet", wallet: walletOwner.wallet_address };
+    }
+
+    const { data: partnerOwner } = await this.supabase.client
+      .from("referral_partners")
+      .select("id")
+      .eq("code", code)
+      .maybeSingle();
+    if (partnerOwner?.id) {
+      return { kind: "partner", partnerId: partnerOwner.id };
+    }
+
+    return null;
+  }
+
+  private referralInsertRow(
+    owner: CodeOwner,
+    code: string,
+    referredWallet: string
+  ): Record<string, unknown> {
+    return owner.kind === "wallet"
+      ? { code, referrer_wallet: owner.wallet, referred_wallet: referredWallet }
+      : {
+          code,
+          referrer_partner_id: owner.partnerId,
+          referred_wallet: referredWallet,
+        };
+  }
+
+  /**
+   * Links a brand-new wallet to the referrer (wallet or partner) that owns
+   * the given code. Never throws: registration must not fail because of a
+   * bad ref code.
    */
   async attribute(params: {
     code: string;
@@ -111,24 +177,70 @@ export class ReferralsService {
       const referred = params.referred_wallet.trim();
       if (!code || !referred) return;
 
-      const { data: owner } = await this.supabase.client
-        .from("referral_codes")
-        .select("wallet_address")
-        .eq("code", code)
-        .maybeSingle();
-      if (!owner?.wallet_address || owner.wallet_address === referred) return;
+      const owner = await this.resolveCodeOwner(code);
+      if (!owner) return;
+      if (owner.kind === "wallet" && owner.wallet === referred) return;
 
-      const { error } = await this.supabase.client.from("referrals").insert({
-        code,
-        referrer_wallet: owner.wallet_address,
-        referred_wallet: referred,
-      });
+      const { error } = await this.supabase.client
+        .from("referrals")
+        .insert(this.referralInsertRow(owner, code, referred));
       if (error && error.code !== "23505") {
         this.logger.warn(`referral attribution failed: ${error.message}`);
       }
     } catch (err) {
       this.logger.warn(`referral attribution failed: ${String(err)}`);
     }
+  }
+
+  /**
+   * Attaches a referral code to a wallet that's already registered but was
+   * never attributed (e.g. it connected before the code was captured).
+   * Unlike attribute(), this is a user-facing action: it throws on bad
+   * input instead of silently no-op'ing.
+   */
+  async claim(wallet: string, rawCode: string): Promise<ReferredBy> {
+    const trimmed = wallet.trim();
+    const code = rawCode.trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException({ code: ErrorCode.INVALID_REFERRAL_CODE });
+    }
+
+    const { data: existing } = await this.supabase.client
+      .from("referrals")
+      .select("id")
+      .eq("referred_wallet", trimmed)
+      .maybeSingle();
+    if (existing) {
+      throw new BadRequestException({ code: ErrorCode.ALREADY_REFERRED });
+    }
+
+    const owner = await this.resolveCodeOwner(code);
+    if (!owner) {
+      throw new BadRequestException({ code: ErrorCode.INVALID_REFERRAL_CODE });
+    }
+    if (owner.kind === "wallet" && owner.wallet === trimmed) {
+      throw new BadRequestException({
+        code: ErrorCode.SELF_REFERRAL_NOT_ALLOWED,
+      });
+    }
+
+    const { error } = await this.supabase.client
+      .from("referrals")
+      .insert(this.referralInsertRow(owner, code, trimmed));
+    if (error) {
+      if (error.code === "23505") {
+        throw new BadRequestException({ code: ErrorCode.ALREADY_REFERRED });
+      }
+      if (error.code === "23503") {
+        throw new NotFoundException({ code: ErrorCode.USER_NOT_FOUND });
+      }
+      this.logger.error(`claim insert failed: ${error.message}`);
+      throw new InternalServerErrorException({
+        code: ErrorCode.CLAIM_FAILED,
+      });
+    }
+
+    return { code, status: "pending" };
   }
 
   /**
@@ -206,21 +318,33 @@ export class ReferralsService {
     await this.confirmPending(trimmed);
     const { code } = await this.getOrCreateCode(trimmed);
 
-    const { data, error } = await this.supabase.client.rpc("referral_stats", {
-      p_referrer: trimmed,
-    });
+    const [{ data, error }, referredByResult] = await Promise.all([
+      this.supabase.client.rpc("referral_stats", { p_referrer: trimmed }),
+      this.supabase.client
+        .from("referrals")
+        .select("code, status")
+        .eq("referred_wallet", trimmed)
+        .maybeSingle(),
+    ]);
     if (error) {
       this.logger.error(`referral_stats failed: ${error.message}`);
       throw new InternalServerErrorException({ code: ErrorCode.STATS_FAILED });
     }
 
     const row = Array.isArray(data) ? data[0] : data;
+    const referredByRow = referredByResult.data;
     return {
       code,
       referred_total: Number(row?.referred_total ?? 0),
       referred_confirmed: Number(row?.referred_confirmed ?? 0),
       swap_volume_usd: Number(row?.swap_volume_usd ?? 0),
       vault_tvl_usd: Number(row?.vault_tvl_usd ?? 0),
+      referred_by: referredByRow
+        ? {
+            code: referredByRow.code,
+            status: referredByRow.status as "pending" | "confirmed",
+          }
+        : null,
     };
   }
 
@@ -261,6 +385,33 @@ export class ReferralsService {
 
     return (Array.isArray(data) ? data : []).map((row) => ({
       referrer_wallet: row.referrer_wallet,
+      code: row.code,
+      email: row.email ?? null,
+      confirmed_count: Number(row.confirmed_count ?? 0),
+      swap_volume_usd: Number(row.swap_volume_usd ?? 0),
+      vault_tvl_usd: Number(row.vault_tvl_usd ?? 0),
+    }));
+  }
+
+  /** Companies/influencers ranked by referred volume. Includes zero-referral
+   * partners so admins see everyone onboarded, not just active ones. */
+  async getPartnerLeaderboard(): Promise<ReferralPartnerLeaderboardRow[]> {
+    await this.confirmPending();
+
+    const { data, error } = await this.supabase.client.rpc(
+      "referral_partner_stats"
+    );
+    if (error) {
+      this.logger.error(`referral_partner_stats failed: ${error.message}`);
+      throw new InternalServerErrorException({
+        code: ErrorCode.PARTNER_LEADERBOARD_FAILED,
+      });
+    }
+
+    return (Array.isArray(data) ? data : []).map((row) => ({
+      partner_id: row.partner_id,
+      name: row.name,
+      type: row.type,
       code: row.code,
       confirmed_count: Number(row.confirmed_count ?? 0),
       swap_volume_usd: Number(row.swap_volume_usd ?? 0),

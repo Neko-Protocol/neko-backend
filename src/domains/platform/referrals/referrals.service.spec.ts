@@ -1,4 +1,4 @@
-import { NotFoundException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { ReferralsService } from "./referrals.service";
@@ -62,7 +62,9 @@ function makeDb(results: Record<string, DbResult[]>) {
     return builder;
   });
 
-  const rpc = jest.fn(() => Promise.resolve({ data: [], error: null }));
+  const rpc = jest.fn(
+    (): Promise<DbResult> => Promise.resolve({ data: [], error: null })
+  );
 
   const supabase = {
     get client() {
@@ -170,6 +172,167 @@ describe("ReferralsService", () => {
       await expect(
         svc.attribute({ code: CODE, referred_wallet: REFERRED })
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("claim()", () => {
+    it("attaches a code to a wallet that was never attributed", async () => {
+      const db = makeDb({
+        referrals: [
+          { data: null, error: null }, // existing-referral check
+          { data: null, error: null }, // insert
+        ],
+        referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(
+        svc.claim(REFERRED, ` ${CODE.toLowerCase()} `)
+      ).resolves.toEqual({
+        code: CODE,
+        status: "pending",
+      });
+
+      const insert = db.calls.find(
+        (c) => c.table === "referrals" && c.method === "insert"
+      );
+      expect(insert?.args[0]).toEqual({
+        code: CODE,
+        referrer_wallet: WALLET,
+        referred_wallet: REFERRED,
+      });
+    });
+
+    it("rejects a wallet that already has a referral", async () => {
+      const db = makeDb({
+        referrals: [{ data: { id: "existing" }, error: null }],
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.claim(REFERRED, CODE)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+      expect(db.calls.filter((c) => c.method === "insert")).toHaveLength(0);
+    });
+
+    it("rejects an unknown code", async () => {
+      const db = makeDb({
+        referrals: [{ data: null, error: null }],
+        referral_codes: [{ data: null, error: null }],
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.claim(REFERRED, "NOPE1234")).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+    });
+
+    it("rejects self-referral", async () => {
+      const db = makeDb({
+        referrals: [{ data: null, error: null }],
+        referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.claim(WALLET, CODE)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+    });
+
+    it("maps a racing duplicate insert to ALREADY_REFERRED", async () => {
+      const db = makeDb({
+        referrals: [
+          { data: null, error: null },
+          { data: null, error: { code: "23505", message: "dup" } },
+        ],
+        referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.claim(REFERRED, CODE)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+    });
+  });
+
+  describe("partner-owned codes", () => {
+    it("attribute() inserts a referrer_partner_id row for a partner code", async () => {
+      const db = makeDb({
+        referral_codes: [{ data: null, error: null }],
+        referral_partners: [{ data: { id: "partner-1" }, error: null }],
+        referrals: [{ data: null, error: null }],
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await svc.attribute({ code: CODE, referred_wallet: REFERRED });
+
+      const insert = db.calls.find(
+        (c) => c.table === "referrals" && c.method === "insert"
+      );
+      expect(insert?.args[0]).toEqual({
+        code: CODE,
+        referrer_partner_id: "partner-1",
+        referred_wallet: REFERRED,
+      });
+    });
+
+    it("claim() attaches a partner code", async () => {
+      const db = makeDb({
+        referrals: [
+          { data: null, error: null },
+          { data: null, error: null },
+        ],
+        referral_codes: [{ data: null, error: null }],
+        referral_partners: [{ data: { id: "partner-1" }, error: null }],
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.claim(REFERRED, CODE)).resolves.toEqual({
+        code: CODE,
+        status: "pending",
+      });
+
+      const insert = db.calls.find(
+        (c) => c.table === "referrals" && c.method === "insert"
+      );
+      expect(insert?.args[0]).toEqual({
+        code: CODE,
+        referrer_partner_id: "partner-1",
+        referred_wallet: REFERRED,
+      });
+    });
+  });
+
+  describe("getPartnerLeaderboard()", () => {
+    it("maps rpc rows, coercing numeric fields", async () => {
+      const db = makeDb({ referrals: [{ data: [], error: null }] });
+      db.rpc.mockResolvedValueOnce({
+        data: [
+          {
+            partner_id: "partner-1",
+            name: "Acme",
+            type: "company",
+            code: "ACME10",
+            confirmed_count: 3,
+            swap_volume_usd: "150.5",
+            vault_tvl_usd: "0",
+          },
+        ],
+        error: null,
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.getPartnerLeaderboard()).resolves.toEqual([
+        {
+          partner_id: "partner-1",
+          name: "Acme",
+          type: "company",
+          code: "ACME10",
+          confirmed_count: 3,
+          swap_volume_usd: 150.5,
+          vault_tvl_usd: 0,
+        },
+      ]);
     });
   });
 });

@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { createHash, randomInt } from "node:crypto";
+import { ConfigService } from "@nestjs/config";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { EmailService } from "@core/email/email.service";
 
@@ -19,11 +21,42 @@ const CODE_TTL_MINUTES = 10;
 @Injectable()
 export class AdminAuthService {
   private readonly logger = new Logger(AdminAuthService.name);
+  private readonly authClient?: SupabaseClient;
 
   constructor(
     private readonly supabase: SupabaseService,
-    private readonly email: EmailService
-  ) {}
+    private readonly email: EmailService,
+    private readonly config: ConfigService
+  ) {
+    const url = this.config.get<string>("SUPABASE_URL");
+    const anonKey = this.config.get<string>("SUPABASE_ANON_KEY");
+    if (url && anonKey) {
+      this.authClient = createClient(url, anonKey, {
+        auth: { persistSession: false },
+      });
+    }
+  }
+
+  /**
+   * Verifies a Supabase access token belongs to a signed-in, currently
+   * active admin. Used by AdminAuthGuard to protect admin-only routes.
+   */
+  async verifyAdminToken(accessToken: string): Promise<boolean> {
+    if (!this.authClient) return false;
+
+    const { data, error } = await this.authClient.auth.getUser(accessToken);
+    if (error || !data?.user?.email) return false;
+
+    const email = data.user.email.trim().toLowerCase();
+    const { data: allowed } = await this.supabase.client
+      .from("admin_emails")
+      .select("email")
+      .eq("email", email)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    return Boolean(allowed);
+  }
 
   private hashCode(code: string): string {
     return createHash("sha256").update(code).digest("hex");
