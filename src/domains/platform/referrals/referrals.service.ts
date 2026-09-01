@@ -122,8 +122,10 @@ export class ReferralsService {
 
   /**
    * Resolves who owns a code: a wallet (self-served, via referral_codes) or
-   * a partner (admin-created, via referral_partners — only if still active).
-   * Checks wallets first since that's the far more common path.
+   * a partner (admin-created, via referral_partners). Checks wallets first
+   * since that's the far more common path. A revoked partner code is
+   * deleted outright (see ReferralPartnersService.remove), so there's no
+   * "inactive but still present" state to filter out here.
    */
   private async resolveCodeOwner(code: string): Promise<CodeOwner | null> {
     const { data: walletOwner } = await this.supabase.client
@@ -137,10 +139,10 @@ export class ReferralsService {
 
     const { data: partnerOwner } = await this.supabase.client
       .from("referral_partners")
-      .select("id, is_active")
+      .select("id")
       .eq("code", code)
       .maybeSingle();
-    if (partnerOwner?.id && partnerOwner.is_active) {
+    if (partnerOwner?.id) {
       return { kind: "partner", partnerId: partnerOwner.id };
     }
 
