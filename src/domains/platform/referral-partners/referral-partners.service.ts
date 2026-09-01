@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { ErrorCode, type ReferralPartner } from "@neko/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { CreateReferralPartnerDto } from "./dto/create-referral-partner.dto";
@@ -28,7 +24,6 @@ export class ReferralPartnersService {
       code,
       email: row.email == null ? null : String(row.email),
       notes: row.notes == null ? null : String(row.notes),
-      is_active: row.is_active !== false,
       created_by: row.created_by == null ? null : String(row.created_by),
       created_at: String(row.created_at ?? ""),
     };
@@ -101,23 +96,20 @@ export class ReferralPartnersService {
     return row;
   }
 
-  async setActive(id: string, isActive: boolean): Promise<ReferralPartner> {
+  /**
+   * Permanently deletes a partner's referral code. This cascades: any
+   * referrals rows already attributed to this partner (confirmed or
+   * pending) are deleted too (referrals.referrer_partner_id ON DELETE
+   * CASCADE), so their referred-volume history goes with it. There is no
+   * soft-delete/deactivate path — a revoked code no longer exists.
+   */
+  async remove(id: string): Promise<void> {
     const { error } = await this.supabase.client
       .from("referral_partners")
-      .update({ is_active: isActive })
+      .delete()
       .eq("id", id);
     if (error) {
-      throw new BadRequestException({ code: ErrorCode.PARTNER_UPDATE_FAILED });
+      throw new BadRequestException({ code: ErrorCode.PARTNER_DELETE_FAILED });
     }
-
-    const { data } = await this.supabase.client
-      .from("referral_partners")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    const row = data ? this.mapRow(data as Row) : null;
-    if (!row)
-      throw new NotFoundException({ code: ErrorCode.PARTNER_NOT_FOUND });
-    return row;
   }
 }
