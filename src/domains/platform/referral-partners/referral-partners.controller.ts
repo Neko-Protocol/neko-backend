@@ -1,9 +1,26 @@
-import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from "@nestjs/swagger";
+import { AdminAuthGuard } from "../admin-auth/admin-auth.guard";
 import { CreateReferralPartnerDto } from "./dto/create-referral-partner.dto";
 import { ReferralPartnersService } from "./referral-partners.service";
 
 @ApiTags("admin/referral-partners")
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: "Missing or invalid admin session." })
+@UseGuards(AdminAuthGuard)
 @Controller("admin/referral-partners")
 export class ReferralPartnersController {
   constructor(private readonly svc: ReferralPartnersService) {}
