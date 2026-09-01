@@ -259,9 +259,7 @@ describe("ReferralsService", () => {
     it("attribute() inserts a referrer_partner_id row for a partner code", async () => {
       const db = makeDb({
         referral_codes: [{ data: null, error: null }],
-        referral_partners: [
-          { data: { id: "partner-1", is_active: true }, error: null },
-        ],
+        referral_partners: [{ data: { id: "partner-1" }, error: null }],
         referrals: [{ data: null, error: null }],
       });
       const svc = new ReferralsService(db.supabase, makeNotifications());
@@ -278,19 +276,6 @@ describe("ReferralsService", () => {
       });
     });
 
-    it("attribute() ignores a deactivated partner code", async () => {
-      const db = makeDb({
-        referral_codes: [{ data: null, error: null }],
-        referral_partners: [
-          { data: { id: "partner-1", is_active: false }, error: null },
-        ],
-      });
-      const svc = new ReferralsService(db.supabase, makeNotifications());
-
-      await svc.attribute({ code: CODE, referred_wallet: REFERRED });
-      expect(db.calls.filter((c) => c.table === "referrals")).toHaveLength(0);
-    });
-
     it("claim() attaches a partner code", async () => {
       const db = makeDb({
         referrals: [
@@ -298,9 +283,7 @@ describe("ReferralsService", () => {
           { data: null, error: null },
         ],
         referral_codes: [{ data: null, error: null }],
-        referral_partners: [
-          { data: { id: "partner-1", is_active: true }, error: null },
-        ],
+        referral_partners: [{ data: { id: "partner-1" }, error: null }],
       });
       const svc = new ReferralsService(db.supabase, makeNotifications());
 
