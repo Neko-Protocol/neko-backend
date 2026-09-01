@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BadRequestException } from "@nestjs/common";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { ReferralPartnersService } from "./referral-partners.service";
 import { CreateReferralPartnerDto } from "./dto/create-referral-partner.dto";
@@ -10,7 +10,6 @@ const PARTNER_ROW = {
   code: "ACME10",
   email: "partner@acme.com",
   notes: null,
-  is_active: true,
   created_by: "admin@nekoprotocol.xyz",
   created_at: "2026-01-01T00:00:00.000Z",
 };
@@ -23,12 +22,6 @@ function makeDb(results: Record<string, DbResult[]>) {
   );
   const calls: Array<{ table: string; method: string; args: unknown[] }> = [];
 
-  const next = (table: string): DbResult => {
-    const queue = queues.get(table);
-    if (!queue?.length) return { data: null, error: null };
-    return queue.shift()!;
-  };
-
   const from = jest.fn((table: string) => {
     const result = () => Promise.resolve(next(table));
     const builder: Record<string, unknown> = {};
@@ -37,12 +30,20 @@ function makeDb(results: Record<string, DbResult[]>) {
         calls.push({ table, method, args });
         return builder;
       });
+
+    function next(t: string): DbResult {
+      const queue = queues.get(t);
+      if (!queue?.length) return { data: null, error: null };
+      return queue.shift()!;
+    }
+
     builder.select = chain("select");
     builder.insert = jest.fn((...args: unknown[]) => {
       calls.push({ table, method: "insert", args });
       return builder;
     });
     builder.update = chain("update");
+    builder.delete = chain("delete");
     builder.eq = chain("eq");
     builder.order = chain("order");
     builder.maybeSingle = jest.fn(() => {
@@ -88,7 +89,6 @@ describe("ReferralPartnersService", () => {
           code: PARTNER_ROW.code,
           email: PARTNER_ROW.email,
           notes: null,
-          is_active: true,
           created_by: PARTNER_ROW.created_by,
           created_at: PARTNER_ROW.created_at,
         },
@@ -123,7 +123,6 @@ describe("ReferralPartnersService", () => {
         code: PARTNER_ROW.code,
         email: PARTNER_ROW.email,
         notes: null,
-        is_active: true,
         created_by: PARTNER_ROW.created_by,
         created_at: PARTNER_ROW.created_at,
       });
@@ -161,31 +160,33 @@ describe("ReferralPartnersService", () => {
     });
   });
 
-  describe("setActive()", () => {
-    it("updates and returns the row", async () => {
+  describe("remove()", () => {
+    it("deletes the row", async () => {
       const db = makeDb({
-        referral_partners: [
-          { data: null, error: null }, // update()
-          { data: { ...PARTNER_ROW, is_active: false }, error: null }, // re-select
-        ],
+        referral_partners: [{ data: null, error: null }],
       });
       const svc = new ReferralPartnersService(db.supabase);
 
-      const result = await svc.setActive(PARTNER_ROW.id, false);
-      expect(result.is_active).toBe(false);
+      await expect(svc.remove(PARTNER_ROW.id)).resolves.toBeUndefined();
+
+      const del = db.calls.find(
+        (c) => c.table === "referral_partners" && c.method === "delete"
+      );
+      expect(del).toBeDefined();
+      const eq = db.calls.find(
+        (c) => c.table === "referral_partners" && c.method === "eq"
+      );
+      expect(eq?.args).toEqual(["id", PARTNER_ROW.id]);
     });
 
-    it("404s when the row disappeared", async () => {
+    it("throws when the delete fails", async () => {
       const db = makeDb({
-        referral_partners: [
-          { data: null, error: null },
-          { data: null, error: null },
-        ],
+        referral_partners: [{ data: null, error: { message: "db down" } }],
       });
       const svc = new ReferralPartnersService(db.supabase);
 
-      await expect(svc.setActive(PARTNER_ROW.id, false)).rejects.toBeInstanceOf(
-        NotFoundException
+      await expect(svc.remove(PARTNER_ROW.id)).rejects.toBeInstanceOf(
+        BadRequestException
       );
     });
   });
