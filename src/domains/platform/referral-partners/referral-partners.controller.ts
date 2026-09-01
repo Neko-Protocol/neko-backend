@@ -1,7 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CreateReferralPartnerDto } from "./dto/create-referral-partner.dto";
-import { UpdateReferralPartnerDto } from "./dto/update-referral-partner.dto";
 import { ReferralPartnersService } from "./referral-partners.service";
 
 @ApiTags("admin/referral-partners")
@@ -23,9 +22,13 @@ export class ReferralPartnersController {
     return this.svc.create(body);
   }
 
-  @Patch(":id")
-  @ApiOperation({ summary: "Activate or deactivate a partner's code." })
-  setActive(@Param("id") id: string, @Body() body: UpdateReferralPartnerDto) {
-    return this.svc.setActive(id, body.is_active);
+  @Delete(":id")
+  @ApiOperation({
+    summary:
+      "Permanently delete a partner's referral code (cascades to their referral history).",
+  })
+  async remove(@Param("id") id: string) {
+    await this.svc.remove(id);
+    return { ok: true };
   }
 }
