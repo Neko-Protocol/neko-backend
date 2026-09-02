@@ -101,7 +101,7 @@ export class ReferralPartnersService {
    * referrals rows already attributed to this partner (confirmed or
    * pending) are deleted too (referrals.referrer_partner_id ON DELETE
    * CASCADE), so their referred-volume history goes with it. There is no
-   * soft-delete/deactivate path — a revoked code no longer exists.
+   * soft-delete/deactivate path, a revoked code no longer exists.
    */
   async remove(id: string): Promise<void> {
     const { error } = await this.supabase.client
