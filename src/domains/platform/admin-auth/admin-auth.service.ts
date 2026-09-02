@@ -170,7 +170,7 @@ export class AdminAuthService {
         ${code}
       </div>
       <p style="margin:24px 0 0;color:#7096d1;font-size:12px;">
-        If you didn't request this, you can safely ignore this email — no action is needed and your account is safe.
+        If you didn't request this, you can safely ignore this email, no action is needed and your account is safe.
       </p>
       <p style="margin:16px 0 0;color:#556;font-size:11px;">
         Neko Protocol &middot; nekoprotocol.xyz

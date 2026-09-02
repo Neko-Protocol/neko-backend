@@ -11,7 +11,7 @@ import { AdminAuthService } from "./admin-auth.service";
  * Protects admin-only routes: requires a Supabase access token (from the
  * admin-auth OTP sign-in flow) belonging to an active row in admin_emails.
  * The shared InternalApiKeyGuard only proves the request came through our
- * own proxy — it does not prove the caller is an admin.
+ * own proxy, it does not prove the caller is an admin.
  */
 @Injectable()
 export class AdminAuthGuard implements CanActivate {
