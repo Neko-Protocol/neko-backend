@@ -16,7 +16,6 @@ const CODE_CREATE_RETRIES = 3;
 
 export interface ReferredBy {
   code: string;
-  status: "pending" | "confirmed";
 }
 
 export interface ReferralMe {
@@ -47,10 +46,12 @@ export interface ReferralPartnerLeaderboardRow {
   vault_tvl_usd: number;
 }
 
-export interface ReferredUser {
+export interface ReferredBreakdownRow {
   referred_wallet: string;
-  status: string;
-  confirmed_at: string | null;
+  email: string | null;
+  referred_at: string;
+  swap_volume_usd: number;
+  vault_tvl_usd: number;
 }
 
 type CodeOwner =
@@ -154,13 +155,35 @@ export class ReferralsService {
     code: string,
     referredWallet: string
   ): Record<string, unknown> {
+    // Confirmed immediately: referrals no longer wait on the referred
+    // wallet verifying their email.
+    const base = {
+      code,
+      referred_wallet: referredWallet,
+      status: "confirmed",
+      confirmed_at: new Date().toISOString(),
+    };
     return owner.kind === "wallet"
-      ? { code, referrer_wallet: owner.wallet, referred_wallet: referredWallet }
-      : {
-          code,
-          referrer_partner_id: owner.partnerId,
-          referred_wallet: referredWallet,
-        };
+      ? { ...base, referrer_wallet: owner.wallet }
+      : { ...base, referrer_partner_id: owner.partnerId };
+  }
+
+  /** Partner-owned referrals have no wallet to notify; wallet referrers get
+   * told right away since confirmation is now immediate, not a later
+   * async promotion. Best-effort: a failed notification must not roll back
+   * a referral that already succeeded. */
+  private async notifyReferrer(
+    owner: CodeOwner,
+    referralId: string
+  ): Promise<void> {
+    if (owner.kind !== "wallet") return;
+    await this.notifications
+      .emit({
+        trigger: "referral_confirmed",
+        walletAddress: owner.wallet,
+        dedupeKey: `referral:${referralId}`,
+      })
+      .catch(() => undefined);
   }
 
   /**
@@ -181,12 +204,18 @@ export class ReferralsService {
       if (!owner) return;
       if (owner.kind === "wallet" && owner.wallet === referred) return;
 
-      const { error } = await this.supabase.client
+      const { data, error } = await this.supabase.client
         .from("referrals")
-        .insert(this.referralInsertRow(owner, code, referred));
-      if (error && error.code !== "23505") {
-        this.logger.warn(`referral attribution failed: ${error.message}`);
+        .insert(this.referralInsertRow(owner, code, referred))
+        .select("id")
+        .single();
+      if (error) {
+        if (error.code !== "23505") {
+          this.logger.warn(`referral attribution failed: ${error.message}`);
+        }
+        return;
       }
+      await this.notifyReferrer(owner, data.id);
     } catch (err) {
       this.logger.warn(`referral attribution failed: ${String(err)}`);
     }
@@ -224,9 +253,11 @@ export class ReferralsService {
       });
     }
 
-    const { error } = await this.supabase.client
+    const { data, error } = await this.supabase.client
       .from("referrals")
-      .insert(this.referralInsertRow(owner, code, trimmed));
+      .insert(this.referralInsertRow(owner, code, trimmed))
+      .select("id")
+      .single();
     if (error) {
       if (error.code === "23505") {
         throw new BadRequestException({ code: ErrorCode.ALREADY_REFERRED });
@@ -239,90 +270,20 @@ export class ReferralsService {
         code: ErrorCode.CLAIM_FAILED,
       });
     }
+    await this.notifyReferrer(owner, data.id);
 
-    return { code, status: "pending" };
-  }
-
-  /**
-   * Promotes pending referrals whose referred user has verified their email.
-   *
-   * Public because email verification is the causal event: UsersService calls
-   * this the moment a wallet's address is confirmed, rather than leaving
-   * confirmation to whenever someone happens to load the referral page.
-   */
-  async confirmPending(referrerWallet?: string): Promise<void> {
-    let query = this.supabase.client
-      .from("referrals")
-      .select("id, referrer_wallet, referred_wallet")
-      .eq("status", "pending");
-    if (referrerWallet) query = query.eq("referrer_wallet", referrerWallet);
-
-    const { data: pending, error } = await query;
-    if (error) {
-      this.logger.error(`confirmPending select failed: ${error.message}`);
-      return;
-    }
-    if (!pending?.length) return;
-
-    const { data: verified, error: usersError } = await this.supabase.client
-      .from("users")
-      .select("wallet_address")
-      .in(
-        "wallet_address",
-        pending.map((row) => row.referred_wallet)
-      )
-      .not("email_verified_at", "is", null);
-    if (usersError) {
-      this.logger.error(`confirmPending users failed: ${usersError.message}`);
-      return;
-    }
-
-    const verifiedWallets = new Set(
-      (verified ?? []).map((row) => row.wallet_address)
-    );
-    const confirmable = pending
-      .filter((row) => verifiedWallets.has(row.referred_wallet))
-      .map((row) => row.id);
-    if (!confirmable.length) return;
-
-    // Returning the affected rows is what makes notifying safe: the
-    // `.eq("status", "pending")` guard means a concurrent caller can only flip
-    // each row once, so whoever gets it back is the one that flipped it.
-    const { data: confirmed, error: updateError } = await this.supabase.client
-      .from("referrals")
-      .update({ status: "confirmed", confirmed_at: new Date().toISOString() })
-      .in("id", confirmable)
-      .eq("status", "pending")
-      .select("id, referrer_wallet");
-    if (updateError) {
-      this.logger.error(`confirmPending update failed: ${updateError.message}`);
-      return;
-    }
-
-    // The referrer is the one who earns something here, so they are the one
-    // who gets told.
-    for (const row of confirmed ?? []) {
-      const referrer =
-        typeof row.referrer_wallet === "string" ? row.referrer_wallet : "";
-      if (!referrer) continue;
-      await this.notifications.emit({
-        trigger: "referral_confirmed",
-        walletAddress: referrer,
-        dedupeKey: `referral:${row.id}`,
-      });
-    }
+    return { code };
   }
 
   async getMe(wallet: string): Promise<ReferralMe> {
     const trimmed = wallet.trim();
-    await this.confirmPending(trimmed);
     const { code } = await this.getOrCreateCode(trimmed);
 
     const [{ data, error }, referredByResult] = await Promise.all([
       this.supabase.client.rpc("referral_stats", { p_referrer: trimmed }),
       this.supabase.client
         .from("referrals")
-        .select("code, status")
+        .select("code")
         .eq("referred_wallet", trimmed)
         .maybeSingle(),
     ]);
@@ -339,40 +300,53 @@ export class ReferralsService {
       referred_confirmed: Number(row?.referred_confirmed ?? 0),
       swap_volume_usd: Number(row?.swap_volume_usd ?? 0),
       vault_tvl_usd: Number(row?.vault_tvl_usd ?? 0),
-      referred_by: referredByRow
-        ? {
-            code: referredByRow.code,
-            status: referredByRow.status as "pending" | "confirmed",
-          }
-        : null,
+      referred_by: referredByRow ? { code: referredByRow.code } : null,
     };
   }
 
-  async getReferred(wallet: string): Promise<ReferredUser[]> {
+  /** Per-wallet breakdown of who a wallet referrer brought in, and how much
+   * volume each one generated. Powers the leaderboard row's drill-down. */
+  async getReferred(wallet: string): Promise<ReferredBreakdownRow[]> {
     const trimmed = wallet.trim();
-    const { data, error } = await this.supabase.client
-      .from("referrals")
-      .select("referred_wallet, status, confirmed_at")
-      .eq("referrer_wallet", trimmed)
-      .order("confirmed_at", { ascending: false });
-
+    const { data, error } = await this.supabase.client.rpc(
+      "referral_referred_breakdown",
+      { p_referrer: trimmed }
+    );
     if (error) {
       this.logger.error(`getReferred failed: ${error.message}`);
       throw new InternalServerErrorException({
         code: ErrorCode.REFERRED_FAILED,
       });
     }
+    return this.mapBreakdownRows(data);
+  }
 
-    return (data ?? []).map((row) => ({
+  /** Same breakdown as getReferred, for a company/influencer partner. */
+  async getPartnerReferred(partnerId: string): Promise<ReferredBreakdownRow[]> {
+    const { data, error } = await this.supabase.client.rpc(
+      "referral_partner_referred_breakdown",
+      { p_partner_id: partnerId }
+    );
+    if (error) {
+      this.logger.error(`getPartnerReferred failed: ${error.message}`);
+      throw new InternalServerErrorException({
+        code: ErrorCode.PARTNER_REFERRED_FAILED,
+      });
+    }
+    return this.mapBreakdownRows(data);
+  }
+
+  private mapBreakdownRows(data: unknown): ReferredBreakdownRow[] {
+    return (Array.isArray(data) ? data : []).map((row) => ({
       referred_wallet: row.referred_wallet,
-      status: row.status,
-      confirmed_at: row.confirmed_at ?? null,
+      email: row.email ?? null,
+      referred_at: row.referred_at,
+      swap_volume_usd: Number(row.swap_volume_usd ?? 0),
+      vault_tvl_usd: Number(row.vault_tvl_usd ?? 0),
     }));
   }
 
   async getLeaderboard(): Promise<ReferralLeaderboardRow[]> {
-    await this.confirmPending();
-
     const { data, error } = await this.supabase.client.rpc(
       "referral_leaderboard"
     );
@@ -396,8 +370,6 @@ export class ReferralsService {
   /** Companies/influencers ranked by referred volume. Includes zero-referral
    * partners so admins see everyone onboarded, not just active ones. */
   async getPartnerLeaderboard(): Promise<ReferralPartnerLeaderboardRow[]> {
-    await this.confirmPending();
-
     const { data, error } = await this.supabase.client.rpc(
       "referral_partner_stats"
     );

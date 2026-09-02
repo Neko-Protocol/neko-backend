@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -65,11 +66,27 @@ export class ReferralsController {
   @Get("referred")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "List users referred by a given wallet (admin)." })
+  @ApiOperation({
+    summary:
+      "Per-wallet breakdown (email, volume) of who a wallet referred (admin).",
+  })
   @ApiUnauthorizedResponse({ description: "Missing or invalid admin session." })
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   getReferred(@Query("wallet") wallet?: string) {
     return this.svc.getReferred(this.requireWallet(wallet));
+  }
+
+  @Get("referred/partner/:partnerId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Per-wallet breakdown (email, volume) of who a partner referred (admin).",
+  })
+  @ApiUnauthorizedResponse({ description: "Missing or invalid admin session." })
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  getPartnerReferred(@Param("partnerId") partnerId: string) {
+    return this.svc.getPartnerReferred(partnerId);
   }
 
   @Get("leaderboard")
