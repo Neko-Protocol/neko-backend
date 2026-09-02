@@ -267,11 +267,6 @@ export class UsersService {
 
       if (updateError) return false;
 
-      // Verifying an email is what makes a pending referral confirmable, so
-      // promote it here instead of waiting for someone to open the referral
-      // page. Best-effort: the email is verified either way.
-      await this.referrals.confirmPending().catch(() => undefined);
-
       return true;
     } catch (err) {
       this.logger.warn(
@@ -319,8 +314,6 @@ export class UsersService {
         code: ErrorCode.UPDATE_FAILED,
       });
     }
-
-    await this.referrals.confirmPending().catch(() => undefined);
 
     return { ok: true };
   }

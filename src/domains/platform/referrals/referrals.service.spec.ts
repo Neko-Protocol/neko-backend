@@ -37,20 +37,15 @@ function makeDb(results: Record<string, DbResult[]>) {
         return builder;
       });
     builder.select = chain("select");
-    builder.insert = jest.fn((...args: unknown[]) => {
-      calls.push({ table, method: "insert", args });
-      const pending = result();
-      return {
-        then: (
-          resolve: (value: DbResult) => unknown,
-          reject?: (reason: unknown) => unknown
-        ) => pending.then(resolve, reject),
-      };
-    });
+    builder.insert = chain("insert");
     builder.update = chain("update");
     builder.eq = chain("eq");
     builder.in = chain("in");
     builder.not = chain("not");
+    builder.single = jest.fn(() => {
+      calls.push({ table, method: "single", args: [] });
+      return result();
+    });
     builder.maybeSingle = jest.fn(() => {
       calls.push({ table, method: "maybeSingle", args: [] });
       return result();
@@ -118,10 +113,10 @@ describe("ReferralsService", () => {
   });
 
   describe("attribute()", () => {
-    it("inserts a pending referral for a known code", async () => {
+    it("inserts an already-confirmed referral for a known code", async () => {
       const db = makeDb({
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
-        referrals: [{ data: null, error: null }],
+        referrals: [{ data: { id: "ref-1" }, error: null }],
       });
       const svc = new ReferralsService(db.supabase, makeNotifications());
 
@@ -137,6 +132,8 @@ describe("ReferralsService", () => {
         code: CODE,
         referrer_wallet: WALLET,
         referred_wallet: REFERRED,
+        status: "confirmed",
+        confirmed_at: expect.any(String),
       });
     });
 
@@ -180,7 +177,7 @@ describe("ReferralsService", () => {
       const db = makeDb({
         referrals: [
           { data: null, error: null }, // existing-referral check
-          { data: null, error: null }, // insert
+          { data: { id: "ref-1" }, error: null }, // insert
         ],
         referral_codes: [{ data: { wallet_address: WALLET }, error: null }],
       });
@@ -190,7 +187,6 @@ describe("ReferralsService", () => {
         svc.claim(REFERRED, ` ${CODE.toLowerCase()} `)
       ).resolves.toEqual({
         code: CODE,
-        status: "pending",
       });
 
       const insert = db.calls.find(
@@ -200,6 +196,8 @@ describe("ReferralsService", () => {
         code: CODE,
         referrer_wallet: WALLET,
         referred_wallet: REFERRED,
+        status: "confirmed",
+        confirmed_at: expect.any(String),
       });
     });
 
@@ -260,7 +258,7 @@ describe("ReferralsService", () => {
       const db = makeDb({
         referral_codes: [{ data: null, error: null }],
         referral_partners: [{ data: { id: "partner-1" }, error: null }],
-        referrals: [{ data: null, error: null }],
+        referrals: [{ data: { id: "ref-1" }, error: null }],
       });
       const svc = new ReferralsService(db.supabase, makeNotifications());
 
@@ -273,6 +271,8 @@ describe("ReferralsService", () => {
         code: CODE,
         referrer_partner_id: "partner-1",
         referred_wallet: REFERRED,
+        status: "confirmed",
+        confirmed_at: expect.any(String),
       });
     });
 
@@ -280,7 +280,7 @@ describe("ReferralsService", () => {
       const db = makeDb({
         referrals: [
           { data: null, error: null },
-          { data: null, error: null },
+          { data: { id: "ref-1" }, error: null },
         ],
         referral_codes: [{ data: null, error: null }],
         referral_partners: [{ data: { id: "partner-1" }, error: null }],
@@ -289,7 +289,6 @@ describe("ReferralsService", () => {
 
       await expect(svc.claim(REFERRED, CODE)).resolves.toEqual({
         code: CODE,
-        status: "pending",
       });
 
       const insert = db.calls.find(
@@ -299,7 +298,74 @@ describe("ReferralsService", () => {
         code: CODE,
         referrer_partner_id: "partner-1",
         referred_wallet: REFERRED,
+        status: "confirmed",
+        confirmed_at: expect.any(String),
       });
+    });
+  });
+
+  describe("getReferred()", () => {
+    it("maps the per-wallet breakdown, coercing numeric fields", async () => {
+      const db = makeDb({});
+      db.rpc.mockResolvedValueOnce({
+        data: [
+          {
+            referred_wallet: REFERRED,
+            email: "referred@example.com",
+            referred_at: "2026-01-01T00:00:00.000Z",
+            swap_volume_usd: "42.5",
+            vault_tvl_usd: "0",
+          },
+        ],
+        error: null,
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.getReferred(WALLET)).resolves.toEqual([
+        {
+          referred_wallet: REFERRED,
+          email: "referred@example.com",
+          referred_at: "2026-01-01T00:00:00.000Z",
+          swap_volume_usd: 42.5,
+          vault_tvl_usd: 0,
+        },
+      ]);
+      expect(db.rpc).toHaveBeenCalledWith("referral_referred_breakdown", {
+        p_referrer: WALLET,
+      });
+    });
+  });
+
+  describe("getPartnerReferred()", () => {
+    it("maps the per-wallet breakdown for a partner", async () => {
+      const db = makeDb({});
+      db.rpc.mockResolvedValueOnce({
+        data: [
+          {
+            referred_wallet: REFERRED,
+            email: null,
+            referred_at: "2026-01-01T00:00:00.000Z",
+            swap_volume_usd: "0",
+            vault_tvl_usd: "100",
+          },
+        ],
+        error: null,
+      });
+      const svc = new ReferralsService(db.supabase, makeNotifications());
+
+      await expect(svc.getPartnerReferred("partner-1")).resolves.toEqual([
+        {
+          referred_wallet: REFERRED,
+          email: null,
+          referred_at: "2026-01-01T00:00:00.000Z",
+          swap_volume_usd: 0,
+          vault_tvl_usd: 100,
+        },
+      ]);
+      expect(db.rpc).toHaveBeenCalledWith(
+        "referral_partner_referred_breakdown",
+        { p_partner_id: "partner-1" }
+      );
     });
   });
 
