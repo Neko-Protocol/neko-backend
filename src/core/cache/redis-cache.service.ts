@@ -152,7 +152,13 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
   async through<T>(
     key: string,
     ttlMs: number,
-    fetch: () => Promise<T>
+    fetch: () => Promise<T>,
+    /**
+     * Decides, from the value itself, whether it may be stored. Returning
+     * false still serves the caller — it only declines to keep the result,
+     * for answers that are correct now and would not be correct later.
+     */
+    shouldCache?: (value: unknown) => boolean
   ): Promise<{ value: T; hit: boolean }> {
     if (!this.isEnabled()) {
       return { value: await fetch(), hit: false };
@@ -166,7 +172,11 @@ export class RedisCacheService implements OnModuleInit, OnModuleDestroy {
 
     const promise = (async () => {
       const value = await fetch();
-      if (value !== undefined && value !== null) {
+      if (
+        value !== undefined &&
+        value !== null &&
+        (shouldCache?.(value) ?? true)
+      ) {
         await this.write(key, value, ttlMs);
       }
       return value;

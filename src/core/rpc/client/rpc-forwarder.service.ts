@@ -59,8 +59,11 @@ export class RpcForwarderService {
     // caching it would hand one client another client's correlation id.
     if (plan.kind !== "none" && this.cache.isEnabled()) {
       const key = this.cache.buildKey(request.method, [params]);
-      const { value, hit } = await this.cache.through(key, plan.ttlMs, () =>
-        this.execute(request)
+      const { value, hit } = await this.cache.through(
+        key,
+        plan.ttlMs,
+        () => this.execute(request),
+        plan.kind === "raw" ? plan.cacheable : undefined
       );
       this.metrics.observeCache(request.method, hit ? "hit" : "miss");
       return { jsonrpc: "2.0", id: request.id, result: value };

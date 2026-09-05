@@ -3,9 +3,10 @@ import {
   Address,
   Contract,
   TransactionBuilder,
+  xdr,
 } from "@stellar/stellar-sdk";
 import { RedisCacheService } from "../../cache/redis-cache.service";
-import { RpcCacheService } from "./rpc-cache.service";
+import { isReadOnlySimulation, RpcCacheService } from "./rpc-cache.service";
 
 const WALLET = "GDCK6VGEMRV52C6UO7Q4FJDFDF5AHKA3SWTSAHJNS3QIKRW6U5L7XYMJ";
 const TOKEN = "CDTKPWPLOURQA2SGTKTUQOWRCBZEORB4BWBOMJ3D3ZTQQSGE5F6JBQLV";
@@ -94,6 +95,51 @@ describe("RpcCacheService", () => {
       expect(plan.kind).toBe("none");
       if (plan.kind !== "none") return;
       expect(plan.reason).toMatch(/not in the cacheable set/);
+    });
+  });
+
+  describe("isReadOnlySimulation", () => {
+    // A write's simulation prices itself against the ledger it ran on. Serving
+    // that again later underpays the transaction, which the network rejects
+    // with txInsufficientFee — so only reads may be kept.
+    const withFootprint = (readWrite: xdr.LedgerKey[]) =>
+      new xdr.SorobanTransactionData({
+        ext: new xdr.SorobanTransactionDataExt(0),
+        resources: new xdr.SorobanResources({
+          footprint: new xdr.LedgerFootprint({ readOnly: [], readWrite }),
+          instructions: 0,
+          diskReadBytes: 0,
+          writeBytes: 0,
+        }),
+        resourceFee: new xdr.Int64(0),
+      }).toXDR("base64");
+
+    const someKey = xdr.LedgerKey.contractData(
+      new xdr.LedgerKeyContractData({
+        contract: new Address(
+          "CCUZC3HC5TH2VCYZFUG57E6IGKPL45YUN2SI3UEYQUBA7RCYHUIZBSFV"
+        ).toScAddress(),
+        key: xdr.ScVal.scvLedgerKeyContractInstance(),
+        durability: xdr.ContractDataDurability.persistent(),
+      })
+    );
+
+    it("keeps a read: no entry is written", () => {
+      expect(isReadOnlySimulation({ transactionData: withFootprint([]) })).toBe(
+        true
+      );
+    });
+
+    it("refuses a write: the footprint touches state", () => {
+      expect(
+        isReadOnlySimulation({ transactionData: withFootprint([someKey]) })
+      ).toBe(false);
+    });
+
+    it("refuses anything it cannot read rather than guessing", () => {
+      expect(isReadOnlySimulation({ transactionData: "not-xdr" })).toBe(false);
+      expect(isReadOnlySimulation({})).toBe(false);
+      expect(isReadOnlySimulation(null)).toBe(false);
     });
   });
 
