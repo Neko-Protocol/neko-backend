@@ -24,6 +24,11 @@ export interface RawCachePlan {
   rawMethod: string;
   parse: (raw: never) => unknown;
   ttlMs: number;
+  /**
+   * Decides from the response whether it may be stored, for methods where
+   * only some answers are safe to keep.
+   */
+  cacheable?: (value: unknown) => boolean;
 }
 
 export interface PlainCachePlan {
@@ -38,6 +43,38 @@ export interface NoCachePlan {
 
 export type CachePlan = RawCachePlan | PlainCachePlan | NoCachePlan;
 
+/**
+ * True only for a simulation that touched no state.
+ *
+ * `simulateTransaction` serves both roles: reading a balance and pricing a
+ * deposit or withdrawal. They look identical at the JSON-RPC layer, but only
+ * one is safe to keep. A write's simulation carries a footprint and a resource
+ * fee measured against the ledger it ran on; replay that later and the
+ * assembled transaction can underpay, which the network rejects with
+ * txInsufficientFee.
+ *
+ * The response says which it is: a read leaves `readWrite` empty. Nothing has
+ * to be inferred from contract or function names, so a new contract method is
+ * classified correctly the day it ships.
+ *
+ * Anything unreadable is treated as uncacheable — declining to store a value
+ * costs a round trip, storing the wrong one costs a failed transaction.
+ */
+export function isReadOnlySimulation(value: unknown): boolean {
+  const data = (value as { transactionData?: unknown } | null)?.transactionData;
+  if (typeof data !== "string" || data.length === 0) return false;
+  try {
+    return (
+      xdr.SorobanTransactionData.fromXDR(data, "base64")
+        .resources()
+        .footprint()
+        .readWrite().length === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
 const RAW_PLANS: Record<string, RawCachePlan> = {
   // The hot path: every token and vault balance is read by simulating a
   // `balance()` call, so this is the method the cache exists for.
@@ -51,6 +88,7 @@ const RAW_PLANS: Record<string, RawCachePlan> = {
     // without the wallet acting — someone sending it tokens — and the browser
     // already holds balances for 60s, twice as long.
     ttlMs: 30_000,
+    cacheable: isReadOnlySimulation,
   },
   getEvents: {
     kind: "raw",
@@ -158,9 +196,10 @@ export class RpcCacheService {
   async through<T>(
     key: string,
     ttlMs: number,
-    exec: () => Promise<T>
+    exec: () => Promise<T>,
+    cacheable?: (value: unknown) => boolean
   ): Promise<{ value: T; hit: boolean }> {
-    return this.store.through(key, ttlMs, exec);
+    return this.store.through(key, ttlMs, exec, cacheable);
   }
 
   /** Drops a single cached entry. Best effort. */
