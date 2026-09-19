@@ -1,8 +1,10 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { AuditService } from "@domains/platform/audit/audit.service";
 import { MailingAudiencesService } from "../audiences/mailing-audiences.service";
 import { AudienceId, isAudienceId } from "../audiences/mailing-audiences.types";
+import { MAILING_SENDS_CONFLICT_TARGET } from "../mailing-sends.constants";
 import { AdminWalletBalanceService } from "../triggers/admin-wallet-balance.service";
 import { EnrollmentCandidate } from "./mailing-enrollment.types";
 
@@ -35,12 +37,29 @@ type ActiveAutomation = AutomationForResolve & {
 export class MailingEnrollmentService {
   private readonly logger = new Logger(MailingEnrollmentService.name);
 
+  private readonly enrollmentFloorMs: number | null;
+
   constructor(
     private readonly supabase: SupabaseService,
     private readonly audit: AuditService,
     private readonly audiences: MailingAudiencesService,
-    private readonly adminWallet: AdminWalletBalanceService
-  ) {}
+    private readonly adminWallet: AdminWalletBalanceService,
+    private readonly config: ConfigService
+  ) {
+    const raw = this.config.get<string>("MAILING_ENROLLMENT_FLOOR")?.trim();
+    if (!raw) {
+      this.enrollmentFloorMs = null;
+      return;
+    }
+    const parsed = Date.parse(raw);
+    if (Number.isNaN(parsed)) {
+      throw new Error(
+        `MAILING_ENROLLMENT_FLOOR is not a valid ISO timestamp: ${raw}`
+      );
+    }
+    this.enrollmentFloorMs = parsed;
+    this.logger.log(`mailing enrollment floor set to ${raw}`);
+  }
 
   /**
    * Alerts every active admin while the keeper wallet is under the threshold.
@@ -364,6 +383,14 @@ export class MailingEnrollmentService {
       );
     }
 
+    if (this.enrollmentFloorMs !== null) {
+      const floor = this.enrollmentFloorMs;
+      candidates = candidates.filter((c) => {
+        const at = Date.parse(c.trigger_at);
+        return !Number.isNaN(at) && at >= floor;
+      });
+    }
+
     return candidates;
   }
 
@@ -457,7 +484,7 @@ export class MailingEnrollmentService {
           const { error: upsertError } = await this.supabase.client
             .from("mailing_sends")
             .upsert(chunk, {
-              onConflict: "message_id,email",
+              onConflict: MAILING_SENDS_CONFLICT_TARGET,
               ignoreDuplicates: true,
             });
           if (upsertError) {

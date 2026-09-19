@@ -4,6 +4,7 @@ import { SupabaseService } from "@core/supabase/supabase.service";
 import { MailingAudiencesService } from "../audiences/mailing-audiences.service";
 import { AudienceId } from "../audiences/mailing-audiences.types";
 import { MailingDispatchService } from "../dispatch/mailing-dispatch.service";
+import { MAILING_SENDS_CONFLICT_TARGET } from "../mailing-sends.constants";
 import { MailingMessagesService } from "./mailing-messages.service";
 import { MailingMessage } from "./mailing-messages.types";
 
@@ -80,7 +81,7 @@ export class MailingBroadcastSendService {
       const { error } = await this.supabase.client
         .from("mailing_sends")
         .upsert(chunk, {
-          onConflict: "message_id,email",
+          onConflict: MAILING_SENDS_CONFLICT_TARGET,
           ignoreDuplicates: true,
         });
       if (error) {
