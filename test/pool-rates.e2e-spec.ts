@@ -29,11 +29,6 @@ jest.mock("@neko/reflector", () => ({
 jest.mock("@neko/defindex-vault", () => ({
   Client: jest.fn().mockImplementation(() => ({})),
 }));
-jest.mock("@xbullcorp/swap-kit", () => ({
-  SwapKit: jest.fn().mockImplementation(() => ({
-    quote: jest.fn().mockRejectedValue(new Error("not configured")),
-  })),
-}));
 jest.mock("@neko/keeper", () => ({
   StellarPriceService: jest.fn().mockImplementation(() => ({
     getPriceWithSource: jest.fn().mockResolvedValue({ price: 0, source: null }),
