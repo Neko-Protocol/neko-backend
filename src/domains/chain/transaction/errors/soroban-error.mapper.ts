@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { decodeSorobanError } from "@shared/stellar/errors/soroban-error.decoder";
 import { SorobanContractException } from "@shared/stellar/errors/soroban-contract.exception";
 

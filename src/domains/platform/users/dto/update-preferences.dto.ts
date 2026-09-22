@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import type { UserPreferences } from "@neko/api-contracts";
+import type { UserPreferences } from "@neko-protocol/api-contracts";
 import { IsObject, IsString, MinLength } from "class-validator";
 
 export class UpdatePreferencesDto {

@@ -14,7 +14,7 @@ import {
   ApiTooManyRequestsResponse,
 } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { MarkAllReadDto } from "./dto/mark-all-read.dto";
 import { MarkReadDto } from "./dto/mark-read.dto";
 import { NotificationsService } from "./notifications.service";

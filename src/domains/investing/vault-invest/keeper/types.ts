@@ -1,4 +1,4 @@
-import type { PlannedInstruction, TargetAllocation } from "@neko/keeper";
+import type { PlannedInstruction, TargetAllocation } from "@neko-protocol/keeper";
 
 export type KeeperMode = "cron" | "manual";
 

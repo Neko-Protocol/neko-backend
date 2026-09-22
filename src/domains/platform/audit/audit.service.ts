@@ -5,7 +5,7 @@ import {
   getContractToCodeMap,
   getCurrentNetworkId,
   type NetworkId,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { CreateAuditDto } from "./dto/create-audit.dto";

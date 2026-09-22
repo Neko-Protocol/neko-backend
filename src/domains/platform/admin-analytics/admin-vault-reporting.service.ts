@@ -4,7 +4,7 @@ import type {
   VaultDepositor,
   VaultDepositorsGroup,
   WalletVaultPosition,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { DefindexService } from "@domains/investing/defindex/defindex.service";

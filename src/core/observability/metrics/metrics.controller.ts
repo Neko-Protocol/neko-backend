@@ -11,7 +11,7 @@ import { ApiExcludeController } from "@nestjs/swagger";
 import { SkipThrottle } from "@nestjs/throttler";
 import { timingSafeEqual } from "crypto";
 import type { Request } from "express";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { SkipAuth } from "../../../common/decorators/skip-auth.decorator";
 import { MetricsRegistryService } from "./metrics-registry.service";
 

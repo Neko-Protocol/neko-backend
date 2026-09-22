@@ -9,7 +9,7 @@ import {
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { StrKey } from "@stellar/stellar-sdk";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { DashboardService } from "./dashboard.service";
 import type {
   DashboardPoolCatalogResponse,

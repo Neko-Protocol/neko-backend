@@ -4,7 +4,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import {
   BASE_FEE,
   Keypair,
@@ -15,18 +15,18 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 import { PoolV2 } from "@blend-capital/blend-sdk";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
+import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
 import {
   createDefindexServerSdk,
   defindexNetworkFromString,
   resolveVaultIdForApi,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import {
   computeBlendEmissionsApy,
   getBlendNetwork,
   getBlndPriceUsd,
   type StellarNetworkId,
-} from "@neko/orchestrator";
+} from "@neko-protocol/orchestrator";
 import type { Network } from "@blend-capital/blend-sdk";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { RedisCacheService } from "@core/cache/redis-cache.service";

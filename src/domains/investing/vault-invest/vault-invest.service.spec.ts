@@ -2,10 +2,10 @@
 import { Test } from "@nestjs/testing";
 import { ConfigModule } from "@nestjs/config";
 
-// VaultInvestService imports @neko/keeper (an ESM workspace package) and
-// @neko/defindex-vault (the contract bindings). Jest's CJS loader cannot
+// VaultInvestService imports @neko-protocol/keeper (an ESM workspace package) and
+// @neko-protocol/defindex-vault (the contract bindings). Jest's CJS loader cannot
 // parse them, so stub just the named exports we touch.
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   planVaultRebalance: jest.fn().mockReturnValue({
     attempted: false,
     reason: "no_idle_funds",
@@ -29,7 +29,7 @@ jest.mock("@neko/keeper", () => ({
   getVaultContractId: jest.fn(),
 }));
 
-jest.mock("@neko/defindex-vault", () => ({
+jest.mock("@neko-protocol/defindex-vault", () => ({
   Client: jest.fn().mockImplementation(() => ({})),
 }));
 
@@ -38,7 +38,7 @@ import {
   getConfiguredRebalanceVaultIds,
   parseAllVaultIds,
   getVaultRebalanceConfig,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { VaultInvestService } from "./vault-invest.service";
 

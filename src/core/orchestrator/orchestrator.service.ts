@@ -7,7 +7,7 @@ import {
   setContractErrorExtractor,
   type CreatedOrchestrator,
   type StellarNetworkId,
-} from "@neko/orchestrator";
+} from "@neko-protocol/orchestrator";
 
 function mapNetwork(raw: string | undefined): StellarNetworkId {
   const n = (raw ?? "").toLowerCase();

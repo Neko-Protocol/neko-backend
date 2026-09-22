@@ -5,7 +5,7 @@ import type {
   NotificationMessageKind,
   NotificationMessageStatus,
   NotificationTriggerId,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 
 export type {
   Notification,

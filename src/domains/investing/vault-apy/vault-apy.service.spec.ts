@@ -5,17 +5,17 @@ import { VaultApyService, type VaultApyResult } from "./vault-apy.service";
 
 const VAULT = "CB3FUMFGCF6DHSFK6N2TOKHRMYXS34HFKQR45UKVORCRUM35AF3ES7WQ";
 
-// @neko/keeper and @neko/orchestrator ship ESM-only dists, so they cannot be
+// @neko-protocol/keeper and @neko-protocol/orchestrator ship ESM-only dists, so they cannot be
 // required from these CJS specs. Nothing here needs the real thing: vault
 // resolution is the only part this suite exercises, and the computation that
 // would use the rest is stubbed out.
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   resolveVaultIdForApi: (requested: string | null) => requested,
   createDefindexServerSdk: jest.fn(),
   defindexNetworkFromString: jest.fn(),
 }));
 
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   computeBlendEmissionsApy: jest.fn(),
   getBlendNetwork: jest.fn(),
   getBlndPriceUsd: jest.fn(),

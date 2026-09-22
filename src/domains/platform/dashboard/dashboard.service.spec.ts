@@ -1,12 +1,12 @@
-jest.mock("@neko/defindex-vault", () => ({
+jest.mock("@neko-protocol/defindex-vault", () => ({
   Client: jest.fn(),
 }));
 
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   parseAllVaultIds: jest.fn(),
 }));
 
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   BLEND_VAULT_ONLY_RESERVES: new Set<string>(),
   throttledRpc: <T>(fn: () => Promise<T>) => fn(),
 }));
@@ -16,8 +16,8 @@ jest.mock("./lp-screen", () => ({
 }));
 
 import { ConfigService } from "@nestjs/config";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
-import { parseAllVaultIds } from "@neko/keeper";
+import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
+import { parseAllVaultIds } from "@neko-protocol/keeper";
 import { RedisCacheService } from "../../../core/cache/redis-cache.service";
 import { DashboardCache } from "./cache/dashboard-cache";
 import { DashboardService } from "./dashboard.service";

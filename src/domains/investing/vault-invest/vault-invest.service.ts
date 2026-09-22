@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Keypair, rpc } from "@stellar/stellar-sdk";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
+import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
 import {
   REBALANCE_THRESHOLD_STROOPS,
   getConfiguredRebalanceVaultIds,
@@ -10,7 +10,7 @@ import {
   planVaultRebalance,
   resolveVaultIdForApi,
   type VaultRebalanceConfig,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { collectFees } from "./keeper/fees";
 import {

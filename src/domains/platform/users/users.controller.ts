@@ -16,7 +16,7 @@ import {
 } from "@nestjs/swagger";
 import { SkipThrottle, Throttle } from "@nestjs/throttler";
 import type { Response } from "express";
-import type { UserPublic } from "@neko/api-contracts";
+import type { UserPublic } from "@neko-protocol/api-contracts";
 import { SkipAuth } from "@common/decorators/skip-auth.decorator";
 import { EmailConfirmDto } from "./dto/email-confirm.dto";
 import { EmailStartDto } from "./dto/email-start.dto";

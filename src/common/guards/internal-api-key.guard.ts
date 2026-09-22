@@ -7,7 +7,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import { timingSafeEqual } from "crypto";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { SKIP_AUTH_KEY } from "../decorators/skip-auth.decorator";
 
 const HEADER_NAME = "x-internal-key";

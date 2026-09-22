@@ -7,7 +7,7 @@ import {
   getCurrentNetworkId,
   parseDefindexVaultIds,
   type StellarPriceService,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import { STELLAR_PRICE_SERVICE } from "@domains/market-data/asset-prices/asset-prices.tokens";
 
 /** Raw DeFindex `getVaultInfo` payload — passed through to the client untouched. */
@@ -135,7 +135,7 @@ export class DefindexService {
         vaults: [],
         prices: {},
         error: "no_vault_ids",
-        hint: "No DeFindex vault IDs configured in @neko/keeper for this network.",
+        hint: "No DeFindex vault IDs configured in @neko-protocol/keeper for this network.",
       };
     }
 

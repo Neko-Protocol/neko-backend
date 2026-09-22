@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import type { PrepareTransactionResponse } from "@neko/api-contracts";
+import type { PrepareTransactionResponse } from "@neko-protocol/api-contracts";
 
 export class TransactionPreparedDto implements PrepareTransactionResponse {
   @ApiProperty({ enum: [true] as const })

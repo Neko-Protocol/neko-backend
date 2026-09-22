@@ -7,7 +7,7 @@ import {
   MaxLength,
   MinLength,
 } from "class-validator";
-import type { ReferralPartnerType } from "@neko/api-contracts";
+import type { ReferralPartnerType } from "@neko-protocol/api-contracts";
 
 export class CreateReferralPartnerDto {
   @IsString()

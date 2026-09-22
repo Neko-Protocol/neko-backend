@@ -1,6 +1,6 @@
 import { Keypair, TransactionBuilder, rpc } from "@stellar/stellar-sdk";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
-import type { ManagedFundsEntryLike } from "@neko/keeper";
+import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
+import type { ManagedFundsEntryLike } from "@neko-protocol/keeper";
 import { errorToString, unwrapSdkResult } from "./helpers";
 import type { AssembledTxLike, TxResult } from "./types";
 

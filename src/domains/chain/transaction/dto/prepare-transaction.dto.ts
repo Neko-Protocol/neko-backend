@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import type { PrepareTransactionRequest } from "@neko/api-contracts";
+import type { PrepareTransactionRequest } from "@neko-protocol/api-contracts";
 import { IsBase64, IsString, MaxLength, MinLength } from "class-validator";
 
 export class PrepareTransactionDto implements PrepareTransactionRequest {

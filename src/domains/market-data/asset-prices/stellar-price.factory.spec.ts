@@ -1,14 +1,14 @@
 import { ConfigService } from "@nestjs/config";
 
 const reflectorCtor = jest.fn();
-jest.mock("@neko/reflector", () => ({
+jest.mock("@neko-protocol/reflector", () => ({
   Client: jest.fn().mockImplementation((opts) => {
     reflectorCtor(opts);
     return { lastprice: jest.fn() };
   }),
 }));
 
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   StellarPriceService: jest.fn().mockImplementation((deps) => ({ deps })),
   getAssetsConfig: jest.fn().mockReturnValue({
     USDC: { code: "USDC", contract: "C_USDC", decimals: 7 },

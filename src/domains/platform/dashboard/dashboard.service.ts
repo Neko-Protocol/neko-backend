@@ -5,9 +5,9 @@ import {
   throttledRpc,
   type PoolInfo,
   type PoolPosition,
-} from "@neko/orchestrator";
-import { parseAllVaultIds, type StellarPriceService } from "@neko/keeper";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
+} from "@neko-protocol/orchestrator";
+import { parseAllVaultIds, type StellarPriceService } from "@neko-protocol/keeper";
+import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
 import { OrchestratorService } from "@core/orchestrator/orchestrator.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { STELLAR_PRICE_SERVICE } from "@domains/market-data/asset-prices/asset-prices.tokens";

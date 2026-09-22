@@ -1,5 +1,5 @@
 import { xdr, Address, rpc } from "@stellar/stellar-sdk";
-import { throttledRpc, type PoolInfo } from "@neko/orchestrator";
+import { throttledRpc, type PoolInfo } from "@neko-protocol/orchestrator";
 
 interface LpCandidate {
   poolId: string;

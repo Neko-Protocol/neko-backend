@@ -1,6 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),
   getAssetsConfig: jest.fn().mockReturnValue({
     CETES: { contract: "C_CETES_FAKE", name: "Cetes" },
@@ -8,7 +8,7 @@ jest.mock("@neko/keeper", () => ({
     TESOURO: { contract: "C_TESOURO_FAKE", name: "Tesouro" },
   }),
 }));
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   createOrchestrator: jest.fn(),
   setContractErrorExtractor: jest.fn(),
 }));

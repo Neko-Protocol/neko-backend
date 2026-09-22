@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { ErrorCode, type ReferralPartner } from "@neko/api-contracts";
+import { ErrorCode, type ReferralPartner } from "@neko-protocol/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { CreateReferralPartnerDto } from "./dto/create-referral-partner.dto";
 

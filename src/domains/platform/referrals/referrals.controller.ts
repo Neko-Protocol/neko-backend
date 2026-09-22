@@ -16,7 +16,7 @@ import {
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { AdminAuthGuard } from "../admin-auth/admin-auth.guard";
 import { ClaimReferralDto } from "./dto/claim-referral.dto";
 import { ReferralsService } from "./referrals.service";

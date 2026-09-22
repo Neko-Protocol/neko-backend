@@ -1,5 +1,5 @@
 import { Keypair, rpc } from "@stellar/stellar-sdk";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
+import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
 import { errorToString } from "./helpers";
 import { sendTx } from "./tx";
 import type { AssembledTxLike, FeesSummary, TxResult } from "./types";

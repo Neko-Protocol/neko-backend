@@ -1,10 +1,10 @@
 import { Test } from "@nestjs/testing";
 
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   parseAllVaultIds: jest.fn(),
 }));
 
-jest.mock("@neko/defindex-vault", () => ({
+jest.mock("@neko-protocol/defindex-vault", () => ({
   Client: jest.fn(),
 }));
 
@@ -18,11 +18,11 @@ import { VaultPpsService } from "./vault-pps.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 
-const { Client: ClientMock } = jest.requireMock("@neko/defindex-vault") as {
+const { Client: ClientMock } = jest.requireMock("@neko-protocol/defindex-vault") as {
   Client: jest.Mock;
 };
 const { parseAllVaultIds: parseAllVaultIdsMock } = jest.requireMock(
-  "@neko/keeper"
+  "@neko-protocol/keeper"
 ) as { parseAllVaultIds: jest.Mock };
 const fetchManagedFundsMock = fetchManagedFunds as unknown as jest.Mock;
 

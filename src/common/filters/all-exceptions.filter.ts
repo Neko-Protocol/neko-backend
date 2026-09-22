@@ -8,7 +8,7 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import type { Request, Response } from "express";
-import { ErrorCode, type ApiErrorBody } from "@neko/api-contracts";
+import { ErrorCode, type ApiErrorBody } from "@neko-protocol/api-contracts";
 
 const isProd = () => process.env.NODE_ENV === "production";
 

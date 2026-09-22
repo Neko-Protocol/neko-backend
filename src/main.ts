@@ -10,7 +10,7 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import compression from "compression";
 import helmet from "helmet";
 import { Logger } from "nestjs-pino";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { AppModule } from "./app.module";
 

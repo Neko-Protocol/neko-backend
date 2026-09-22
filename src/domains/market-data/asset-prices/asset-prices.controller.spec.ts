@@ -1,6 +1,6 @@
 import { Test } from "@nestjs/testing";
 
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   StellarPriceService: jest.fn(),
   getAssetsConfig: jest.fn().mockReturnValue({}),
   getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),

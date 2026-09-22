@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type {
   NotificationStats,
   NotificationTriggerCoverage,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { NOTIFICATION_TRIGGERS } from "../notifications.types";
 

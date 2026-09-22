@@ -7,7 +7,7 @@
  * job, not ours.
  */
 
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 
 export interface DecodedSorobanError {
   /** Stable identifier we can use to map → HttpException downstream. */

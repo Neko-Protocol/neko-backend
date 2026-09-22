@@ -1,5 +1,5 @@
-// AuditService pulls in @neko/keeper, which ships ESM that Jest can't parse.
-jest.mock("@neko/keeper", () => ({
+// AuditService pulls in @neko-protocol/keeper, which ships ESM that Jest can't parse.
+jest.mock("@neko-protocol/keeper", () => ({
   getAssetsConfig: () => ({}),
   getContractToCodeMap: () => ({}),
   getCurrentNetworkId: () => "PUBLIC",

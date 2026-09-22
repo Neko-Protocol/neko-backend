@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import type { EmailStartRequest } from "@neko/api-contracts";
+import type { EmailStartRequest } from "@neko-protocol/api-contracts";
 import { IsEmail, IsString, MinLength } from "class-validator";
 
 export class EmailStartDto implements EmailStartRequest {

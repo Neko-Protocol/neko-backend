@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { getAssetsConfig, getCurrentNetworkId } from "@neko/keeper";
-import type { PoolInfo, PoolType } from "@neko/orchestrator";
+import { getAssetsConfig, getCurrentNetworkId } from "@neko-protocol/keeper";
+import type { PoolInfo, PoolType } from "@neko-protocol/orchestrator";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { OrchestratorService } from "@core/orchestrator/orchestrator.service";
 import { DefindexService } from "../defindex/defindex.service";

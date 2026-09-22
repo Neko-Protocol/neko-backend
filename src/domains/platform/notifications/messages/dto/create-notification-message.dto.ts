@@ -10,7 +10,7 @@ import {
   MAILING_AUDIENCE_IDS,
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_TRIGGER_IDS,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 
 export class CreateNotificationMessageDto {
   @IsIn(["trigger", "announcement"])

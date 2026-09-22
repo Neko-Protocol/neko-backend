@@ -3,7 +3,7 @@ import type {
   TargetAllocation,
   VaultRebalanceConfig,
   planVaultRebalance,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import type {
   FeesSummary,
   RebalanceSummary,

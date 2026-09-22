@@ -7,11 +7,11 @@ import {
   getAssetsConfig,
   getCurrentNetworkId,
   type StellarPriceServiceDeps,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import {
   Client as ReflectorClient,
   type Client as ReflectorClientType,
-} from "@neko/reflector";
+} from "@neko-protocol/reflector";
 
 const REFLECTOR_CONTRACT_ID =
   "CALI2BYU2JE6WVRUFYTS6MSBNEHGJ35P4AVCZYF3B6QOE3QKOB2PLE6M";

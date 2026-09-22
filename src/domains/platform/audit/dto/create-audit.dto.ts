@@ -1,5 +1,5 @@
 import { IsIn, IsNumber, IsOptional, IsString } from "class-validator";
-import { AUDIT_ACTION_TYPES, type AuditActionType } from "@neko/api-contracts";
+import { AUDIT_ACTION_TYPES, type AuditActionType } from "@neko-protocol/api-contracts";
 
 export { AUDIT_ACTION_TYPES, type AuditActionType };
 

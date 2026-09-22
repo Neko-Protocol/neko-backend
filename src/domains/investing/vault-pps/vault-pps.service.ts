@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Client as DefindexVaultClient } from "@neko/defindex-vault";
-import { parseAllVaultIds } from "@neko/keeper";
+import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
+import { parseAllVaultIds } from "@neko-protocol/keeper";
 import { fetchManagedFunds } from "../vault-invest/keeper/tx";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";

@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import type { EmailConfirmRequest } from "@neko/api-contracts";
+import type { EmailConfirmRequest } from "@neko-protocol/api-contracts";
 import { IsString, MinLength } from "class-validator";
 
 export class EmailConfirmDto implements EmailConfirmRequest {

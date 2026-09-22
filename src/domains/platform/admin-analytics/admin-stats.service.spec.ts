@@ -1,8 +1,8 @@
 // AdminStatsService's AdminVaultReportingService param transitively imports
 // DefindexService/DashboardService, which pull in
-// @neko/keeper/@neko/orchestrator/@neko/defindex-vault (ESM workspace
+// @neko-protocol/keeper/@neko-protocol/orchestrator/@neko-protocol/defindex-vault (ESM workspace
 // packages Jest's CJS loader can't parse) — stub the named exports touched.
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   createDefindexServerSdk: jest.fn(),
   defindexNetworkFromString: jest.fn(),
   getAssetsConfig: jest.fn().mockReturnValue({}),
@@ -10,11 +10,11 @@ jest.mock("@neko/keeper", () => ({
   parseDefindexVaultIds: jest.fn().mockReturnValue([]),
   parseAllVaultIds: jest.fn().mockReturnValue([]),
 }));
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   BLEND_VAULT_ONLY_RESERVES: new Set(),
   throttledRpc: (fn: () => unknown) => fn(),
 }));
-jest.mock("@neko/defindex-vault", () => ({ Client: jest.fn() }));
+jest.mock("@neko-protocol/defindex-vault", () => ({ Client: jest.fn() }));
 
 import { AdminStatsService } from "./admin-stats.service";
 import type { AdminVaultReportingService } from "./admin-vault-reporting.service";
@@ -56,7 +56,7 @@ function makeService(fromMock: jest.Mock, tvlUsd = 0) {
 
   // Instantiated directly (no NestJS DI) — see admin-vault-reporting.service.spec.ts
   // for why: importing the real service classes for DI tokens would pull in
-  // @neko/keeper's ESM build, which Jest's CJS transform can't parse.
+  // @neko-protocol/keeper's ESM build, which Jest's CJS transform can't parse.
   return new AdminStatsService(supabase, vaultReporting);
 }
 

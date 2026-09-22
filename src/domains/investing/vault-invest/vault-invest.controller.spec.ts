@@ -2,7 +2,7 @@ import { Test } from "@nestjs/testing";
 
 // VaultInvestController imports VaultInvestService which pulls in ESM workspace
 // packages. Stub them so Jest's CJS loader can process the module graph.
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   planVaultRebalance: jest.fn(),
   getConfiguredRebalanceVaultIds: jest.fn().mockReturnValue([]),
   getVaultRebalanceConfig: jest.fn(),
@@ -10,7 +10,7 @@ jest.mock("@neko/keeper", () => ({
   resolveVaultIdForApi: jest.fn(),
 }));
 
-jest.mock("@neko/defindex-vault", () => ({
+jest.mock("@neko-protocol/defindex-vault", () => ({
   Client: jest.fn().mockImplementation(() => ({})),
 }));
 

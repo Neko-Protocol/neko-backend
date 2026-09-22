@@ -1,9 +1,9 @@
 import { Test } from "@nestjs/testing";
 import { ConfigModule } from "@nestjs/config";
 
-// AssetPricesService imports @neko/keeper (an ESM workspace package). Jest's
+// AssetPricesService imports @neko-protocol/keeper (an ESM workspace package). Jest's
 // CJS loader cannot parse it, so stub just the named exports we touch.
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),
   getAssetsConfig: jest.fn().mockReturnValue({
     XLM: { code: "XLM", contract: "C_XLM_FAKE" },

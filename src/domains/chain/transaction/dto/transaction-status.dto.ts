@@ -3,7 +3,7 @@ import type {
   TransactionStatus,
   TransactionStatusError as TransactionStatusErrorContract,
   TransactionStatusResponse,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 
 export type { TransactionStatus };
 

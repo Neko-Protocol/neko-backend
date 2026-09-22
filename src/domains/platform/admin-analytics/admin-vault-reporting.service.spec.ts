@@ -1,9 +1,9 @@
 // AdminVaultReportingService's constructor params (DefindexService,
 // DashboardService) must be real class values for NestJS's DI metadata, and
-// those files import @neko/keeper/@neko/orchestrator/@neko/defindex-vault
+// those files import @neko-protocol/keeper/@neko-protocol/orchestrator/@neko-protocol/defindex-vault
 // (ESM workspace packages Jest's CJS loader can't parse) — stub just the
 // named exports touched at import time.
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   createDefindexServerSdk: jest.fn(),
   defindexNetworkFromString: jest.fn(),
   getAssetsConfig: jest.fn().mockReturnValue({}),
@@ -11,11 +11,11 @@ jest.mock("@neko/keeper", () => ({
   parseDefindexVaultIds: jest.fn().mockReturnValue([]),
   parseAllVaultIds: jest.fn().mockReturnValue([]),
 }));
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   BLEND_VAULT_ONLY_RESERVES: new Set(),
   throttledRpc: (fn: () => unknown) => fn(),
 }));
-jest.mock("@neko/defindex-vault", () => ({ Client: jest.fn() }));
+jest.mock("@neko-protocol/defindex-vault", () => ({ Client: jest.fn() }));
 
 import { AdminVaultReportingService } from "./admin-vault-reporting.service";
 import type { SupabaseService } from "@core/supabase/supabase.service";
@@ -57,7 +57,7 @@ function makeService(overrides: {
 
   // Instantiated directly (no NestJS DI container) so this test never has to
   // import the real DefindexService/DashboardService modules — both pull in
-  // @neko/keeper's ESM build, which Jest's CJS transform can't parse.
+  // @neko-protocol/keeper's ESM build, which Jest's CJS transform can't parse.
   return new AdminVaultReportingService(supabase, defindex, dashboard, stellar);
 }
 

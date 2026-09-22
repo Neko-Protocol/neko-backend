@@ -1,10 +1,10 @@
 import { Test } from "@nestjs/testing";
 
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   getCurrentNetworkId: jest.fn().mockReturnValue("mainnet"),
   getAssetsConfig: jest.fn().mockReturnValue({}),
 }));
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   createOrchestrator: jest.fn(),
   setContractErrorExtractor: jest.fn(),
 }));

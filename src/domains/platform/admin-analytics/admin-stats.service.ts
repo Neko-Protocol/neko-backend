@@ -5,7 +5,7 @@ import type {
   ListTransactionsResult,
   OverviewStats,
   UserStats,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { AdminVaultReportingService } from "./admin-vault-reporting.service";
 

@@ -1,4 +1,4 @@
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   getAssetsConfig: () => ({}),
   getContractToCodeMap: () => ({}),
   getCurrentNetworkId: () => "PUBLIC",

@@ -11,7 +11,7 @@ import {
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import {
   getContractLabel,

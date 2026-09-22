@@ -6,7 +6,7 @@ import {
   type AssetConfig,
   type NetworkId,
   type StellarPriceService,
-} from "@neko/keeper";
+} from "@neko-protocol/keeper";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { RedisCacheService } from "@core/cache/redis-cache.service";
 import { STELLAR_PRICE_SERVICE } from "./asset-prices.tokens";

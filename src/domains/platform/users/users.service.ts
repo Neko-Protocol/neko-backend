@@ -10,7 +10,7 @@ import {
   ErrorCode,
   type UserPreferences,
   type UserPublic,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { ReferralsService } from "../referrals/referrals.service";
 import { SupabaseService } from "@core/supabase/supabase.service";

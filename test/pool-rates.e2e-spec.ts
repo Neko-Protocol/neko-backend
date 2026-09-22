@@ -14,22 +14,22 @@ import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
 
-// AppModule transitively loads @neko/orchestrator and @neko/keeper (ESM workspace
+// AppModule transitively loads @neko-protocol/orchestrator and @neko-protocol/keeper (ESM workspace
 // packages); stub them so the CJS jest runner does not parse their ESM builds.
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   createOrchestrator: () => ({
     orchestrator: { getAllPools: jest.fn().mockResolvedValue([]) },
     poolRegistry: { getAdapters: () => [] },
   }),
   setContractErrorExtractor: jest.fn(),
 }));
-jest.mock("@neko/reflector", () => ({
+jest.mock("@neko-protocol/reflector", () => ({
   Client: jest.fn().mockImplementation(() => ({})),
 }));
-jest.mock("@neko/defindex-vault", () => ({
+jest.mock("@neko-protocol/defindex-vault", () => ({
   Client: jest.fn().mockImplementation(() => ({})),
 }));
-jest.mock("@neko/keeper", () => ({
+jest.mock("@neko-protocol/keeper", () => ({
   StellarPriceService: jest.fn().mockImplementation(() => ({
     getPriceWithSource: jest.fn().mockResolvedValue({ price: 0, source: null }),
   })),

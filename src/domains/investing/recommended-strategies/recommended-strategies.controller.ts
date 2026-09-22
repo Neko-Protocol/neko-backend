@@ -9,7 +9,7 @@ import {
   Post,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import {
   CreateRecommendedDto,
   UpdateRecommendedDto,

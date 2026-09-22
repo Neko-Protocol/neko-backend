@@ -9,7 +9,7 @@ import {
 } from "@nestjs/common";
 import { ApiExcludeController } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import {
   JsonRpcRequest,
   JsonRpcResponse,

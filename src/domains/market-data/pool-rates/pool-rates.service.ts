@@ -3,7 +3,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from "@nestjs/common";
-import { ErrorCode } from "@neko/api-contracts";
+import { ErrorCode } from "@neko-protocol/api-contracts";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { BlendPoolAdapter } from "./adapters/blend-pool.adapter";

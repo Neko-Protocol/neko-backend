@@ -13,7 +13,7 @@ const TOKEN = "CDTKPWPLOURQA2SGTKTUQOWRCBZEORB4BWBOMJ3D3ZTQQSGE5F6JBQLV";
 const OTHER_TOKEN = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
 const PASSPHRASE = "Public Global Stellar Network ; September 2015";
 
-/** A balance read, exactly as @neko/orchestrator builds one. */
+/** A balance read, exactly as @neko-protocol/orchestrator builds one. */
 function balanceEnvelope(contract = TOKEN, sequence = "12345"): string {
   return (
     new TransactionBuilder(new Account(WALLET, sequence), {

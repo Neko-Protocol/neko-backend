@@ -1,7 +1,7 @@
 import type {
   EtherfuseBondSymbol,
   EtherfuseYieldEntry,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 
 export const BONDS_COST_URL = "https://api.etherfuse.com/lookup/bonds/cost";
 

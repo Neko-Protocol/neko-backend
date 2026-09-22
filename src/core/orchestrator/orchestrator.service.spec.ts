@@ -12,7 +12,7 @@ const createOrchestratorMock = jest.fn().mockReturnValue({
 });
 const setContractErrorExtractorMock = jest.fn();
 
-jest.mock("@neko/orchestrator", () => ({
+jest.mock("@neko-protocol/orchestrator", () => ({
   createOrchestrator: createOrchestratorMock,
   setContractErrorExtractor: setContractErrorExtractorMock,
 }));

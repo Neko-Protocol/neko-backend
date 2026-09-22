@@ -2,7 +2,7 @@ import { ApiProperty } from "@nestjs/swagger";
 import type {
   EtherfuseBondSymbol,
   EtherfuseYieldEntry,
-} from "@neko/api-contracts";
+} from "@neko-protocol/api-contracts";
 
 export class BondYieldEntryDto implements EtherfuseYieldEntry {
   @ApiProperty({ enum: ["CETES", "USTRY", "TESOURO"] })
