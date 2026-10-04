@@ -53,7 +53,8 @@ export const envValidationSchema = Joi.object({
         return value;
       } catch (err) {
         return helpers.message(
-          err instanceof Error ? err.message : "Invalid CORS_ORIGIN"
+          { custom: "{{#reason}}" },
+          { reason: err instanceof Error ? err.message : "Invalid CORS_ORIGIN" }
         );
       }
     }),
