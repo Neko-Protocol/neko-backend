@@ -52,9 +52,9 @@ export const envValidationSchema = Joi.object({
         parseCorsOrigins(value);
         return value;
       } catch (err) {
-        return helpers.message(
-          err instanceof Error ? err.message : "Invalid CORS_ORIGIN"
-        );
+        const reason =
+          err instanceof Error ? err.message : "Invalid CORS_ORIGIN";
+        return helpers.message({ custom: "{{#reason}}" }, { reason });
       }
     }),
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
