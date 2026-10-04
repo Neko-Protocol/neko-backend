@@ -13,6 +13,7 @@ import { Logger } from "nestjs-pino";
 import { ErrorCode } from "@neko-protocol/api-contracts";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { AppModule } from "./app.module";
+import { parseCorsOrigins } from "./config/cors-origins";
 
 // Node.js < 22 has no global WebSocket; @supabase/supabase-js's realtime client
 // requires one at construction time. Polyfill it before any client is created.
@@ -61,10 +62,7 @@ async function bootstrap() {
     app.set("trust proxy", trustProxyHops);
   }
 
-  const origins = (process.env.CORS_ORIGIN ?? "")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
+  const origins = parseCorsOrigins(process.env.CORS_ORIGIN);
 
   if (origins.length === 0) {
     logger.warn(
