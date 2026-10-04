@@ -1,4 +1,5 @@
 import * as Joi from "joi";
+import { parseCorsOrigins } from "./cors-origins";
 
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
@@ -41,7 +42,21 @@ export const envValidationSchema = Joi.object({
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().min(1).required(),
   SUPABASE_ANON_KEY: Joi.string().min(1).required(),
 
-  CORS_ORIGIN: Joi.string().optional().allow(""),
+  // Comma-separated origins, or a JSON array of origin strings. Empty rejects
+  // every browser origin. See parseCorsOrigins.
+  CORS_ORIGIN: Joi.string()
+    .optional()
+    .allow("")
+    .custom((value: string, helpers) => {
+      try {
+        parseCorsOrigins(value);
+        return value;
+      } catch (err) {
+        return helpers.message(
+          err instanceof Error ? err.message : "Invalid CORS_ORIGIN"
+        );
+      }
+    }),
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
 
   INTERNAL_API_KEY: Joi.string().min(32).required(),
