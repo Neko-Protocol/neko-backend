@@ -1,6 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Horizon, rpc, Transaction } from "@stellar/stellar-sdk";
+import {
+  FeeBumpTransaction,
+  Horizon,
+  rpc,
+  Transaction,
+} from "@stellar/stellar-sdk";
 import { RpcClientService } from "../rpc/client/rpc-client.service";
 import { RpcPoolService } from "../rpc/pool/rpc-pool.service";
 import {
@@ -66,7 +71,7 @@ export class StellarRpcService implements OnModuleInit {
     return this.pool.all()[0]?.config.url ?? "";
   }
 
-  sendTransaction(tx: Transaction) {
+  sendTransaction(tx: Transaction | FeeBumpTransaction) {
     return this.rpc.sendTransaction(tx);
   }
 
