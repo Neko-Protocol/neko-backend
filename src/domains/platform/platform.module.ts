@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AccountsModule } from "./accounts/accounts.module";
 import { AdminAnalyticsModule } from "./admin-analytics/admin-analytics.module";
 import { AdminAuthModule } from "./admin-auth/admin-auth.module";
 import { AdminEmailsModule } from "./admin-emails/admin-emails.module";
@@ -13,6 +14,7 @@ import { UsersModule } from "./users/users.module";
 @Module({
   imports: [
     UsersModule,
+    AccountsModule,
     DashboardModule,
     ReferralsModule,
     ReferralPartnersModule,

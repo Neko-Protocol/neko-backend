@@ -18,5 +18,6 @@ import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
       useFactory: () => new PreparedTxCache(),
     },
   ],
+  exports: [TransactionService],
 })
 export class TransactionModule {}

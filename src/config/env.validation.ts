@@ -78,4 +78,17 @@ export const envValidationSchema = Joi.object({
   ADMIN_WALLET_ADDRESS: Joi.string().optional().allow(""),
   RESEND_API_KEY: Joi.string().optional().allow(""),
   RESEND_FROM_EMAIL: Joi.string().default("noreply@nekoprotocol.xyz"),
+
+  PRIVY_APP_ID: Joi.string().optional().allow(""),
+  PRIVY_APP_SECRET: Joi.string().optional().allow(""),
+  PRIVY_VERIFICATION_KEY: Joi.string().optional().allow(""),
+  SPONSOR_SECRET_KEY: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  SPONSOR_TRUSTLINES: Joi.string().optional().allow(""),
+  SPONSOR_MAX_FEE_STROOPS: Joi.number().integer().min(100).default(5_000_000),
+  SPONSOR_MIN_BALANCE_XLM: Joi.number().min(0).default(5),
+  SPONSOR_LOW_BALANCE_XLM: Joi.number().min(0).default(50),
+  SPONSOR_DAILY_ACTIVATION_CAP: Joi.number().integer().min(0).default(100),
 });
