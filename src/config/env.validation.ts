@@ -78,4 +78,8 @@ export const envValidationSchema = Joi.object({
   ADMIN_WALLET_ADDRESS: Joi.string().optional().allow(""),
   RESEND_API_KEY: Joi.string().optional().allow(""),
   RESEND_FROM_EMAIL: Joi.string().default("noreply@nekoprotocol.xyz"),
+
+  PRIVY_APP_ID: Joi.string().optional().allow(""),
+  PRIVY_APP_SECRET: Joi.string().optional().allow(""),
+  PRIVY_VERIFICATION_KEY: Joi.string().optional().allow(""),
 });
