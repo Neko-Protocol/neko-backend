@@ -11,7 +11,9 @@ import {
   FeeBumpTransaction,
   Keypair,
   Networks,
+  Operation,
   rpc,
+  SorobanDataBuilder,
   TransactionBuilder,
   xdr,
 } from "@stellar/stellar-sdk";
@@ -21,11 +23,26 @@ import { DashboardCache } from "@domains/platform/dashboard/cache/dashboard-cach
 import { TransactionService } from "./transaction.service";
 import { XdrValidator } from "./validation/xdr-validator";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { SponsorService } from "@core/stellar/sponsor.service";
+import { ConfigService } from "@nestjs/config";
 
 const PASSPHRASE = Networks.PUBLIC;
 const ALLOWED_BLEND_POOL =
   "CDMAVJPFXPADND3YRL4BSM3AKZWCTFMX27GLLXCML3PD62HEQS5FPVAI";
 const IP = "127.0.0.1";
+const SPONSOR = Keypair.random();
+
+function makeSponsor(
+  rpc: StellarRpcService,
+  env: Record<string, unknown> = {}
+): SponsorService {
+  const values: Record<string, unknown> = {
+    SPONSOR_SECRET_KEY: SPONSOR.secret(),
+    ...env,
+  };
+  const config = { get: (k: string) => values[k] } as unknown as ConfigService;
+  return new SponsorService(config, rpc);
+}
 
 function buildUnsignedXdr() {
   const account = new Account(Keypair.random().publicKey(), "0");
@@ -48,17 +65,38 @@ interface MockedRpc {
   service: StellarRpcService;
   sendTransaction: jest.Mock;
   getTransaction: jest.Mock;
+  simulateTransaction: jest.Mock;
 }
 
 function makeRpcMock(): MockedRpc {
   const sendTransaction = jest.fn();
   const getTransaction = jest.fn();
+  const simulateTransaction = jest.fn(async () => ({
+    minResourceFee: "50000",
+    latestLedger: 1,
+  }));
   const service = {
     getNetworkPassphrase: () => PASSPHRASE,
     sendTransaction,
     getTransaction,
+    rpc: { simulateTransaction },
   } as unknown as StellarRpcService;
-  return { service, sendTransaction, getTransaction };
+  return { service, sendTransaction, getTransaction, simulateTransaction };
+}
+
+function buildSorobanXdr(resourceFee: number) {
+  const account = new Account(Keypair.random().publicKey(), "0");
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: PASSPHRASE,
+  })
+    .addOperation(new Contract(ALLOWED_BLEND_POOL).call("deposit"))
+    .setSorobanData(
+      new SorobanDataBuilder().setResourceFee(resourceFee).build()
+    )
+    .setTimeout(30)
+    .build();
+  return { xdr: tx.toXDR(), sourceAccount: account.accountId() };
 }
 
 function successResponse(
@@ -133,7 +171,8 @@ describe("TransactionService", () => {
       validator,
       cache,
       mapper,
-      dashboardCache as unknown as DashboardCache
+      dashboardCache as unknown as DashboardCache,
+      makeSponsor(rpcMock.service)
     );
     originalNodeEnv = process.env.NODE_ENV;
   });
@@ -485,6 +524,178 @@ describe("TransactionService", () => {
         const body = (err as HttpException).getResponse() as { code: string };
         expect(body.code).toBe("BAD_SEQUENCE");
       }
+    });
+  });
+
+  describe("sponsored relay (sponsorFor)", () => {
+    it("prepare rejects a source that is not the caller's wallet", async () => {
+      const { xdr } = buildUnsignedXdr();
+      await expect(
+        service.prepare({ unsignedXdr: xdr }, IP, undefined, {
+          sponsorFor: Keypair.random().publicKey(),
+        })
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it("prepare refuses to sponsor plain payments", async () => {
+      const account = new Account(Keypair.random().publicKey(), "0");
+      const payment = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: PASSPHRASE,
+      })
+        .addOperation(
+          Operation.payment({
+            destination: Keypair.random().publicKey(),
+            asset: (await import("@stellar/stellar-sdk")).Asset.native(),
+            amount: "1",
+          })
+        )
+        .setTimeout(30)
+        .build();
+      await expect(
+        service.prepare({ unsignedXdr: payment.toXDR() }, IP, undefined, {
+          sponsorFor: account.accountId(),
+        })
+      ).rejects.toMatchObject({ response: { code: "DISALLOWED_OPERATION" } });
+      expect(rpcMock.simulateTransaction).not.toHaveBeenCalled();
+    });
+
+    it("prepare rejects a transaction that fails simulation", async () => {
+      rpcMock.simulateTransaction.mockResolvedValueOnce({
+        error: "HostError: contract trapped",
+        latestLedger: 1,
+      });
+      const { xdr, sourceAccount } = buildUnsignedXdr();
+      await expect(
+        service.prepare({ unsignedXdr: xdr }, IP, undefined, {
+          sponsorFor: sourceAccount,
+        })
+      ).rejects.toMatchObject({ response: { code: "SIMULATION_FAILED" } });
+      expect(cache.peek(sourceAccount)).toBeUndefined();
+    });
+
+    it("prepare rejects a declared resource fee far above the simulation", async () => {
+      // Simulation needs 50,000; allowed is 50,000 * 1.5 + 100,000 = 175,000.
+      const { xdr, sourceAccount } = buildSorobanXdr(400_000);
+      await expect(
+        service.prepare({ unsignedXdr: xdr }, IP, undefined, {
+          sponsorFor: sourceAccount,
+        })
+      ).rejects.toMatchObject({ response: { code: "SPONSOR_FEE_TOO_HIGH" } });
+    });
+
+    it("prepare accepts a resource fee in line with the simulation", async () => {
+      const { xdr, sourceAccount } = buildSorobanXdr(60_000);
+      await expect(
+        service.prepare({ unsignedXdr: xdr }, IP, undefined, {
+          sponsorFor: sourceAccount,
+        })
+      ).resolves.toMatchObject({ ok: true });
+    });
+
+    it("unsponsored prepare does not simulate", async () => {
+      const { xdr } = buildUnsignedXdr();
+      await service.prepare({ unsignedXdr: xdr }, IP);
+      expect(rpcMock.simulateTransaction).not.toHaveBeenCalled();
+    });
+
+    it("fee-bump charges the inner resource fee once and the rate per op", async () => {
+      const { xdr, sourceAccount } = buildSorobanXdr(60_000);
+      await service.prepare({ unsignedXdr: xdr }, IP, undefined, {
+        sponsorFor: sourceAccount,
+      });
+      rpcMock.sendTransaction.mockImplementation(async (tx) => ({
+        status: "PENDING",
+        hash: tx.hash().toString("hex"),
+      }));
+      rpcMock.getTransaction.mockResolvedValue(successResponse());
+
+      await service.submit({ signedXdr: xdr }, IP, undefined, {
+        sponsorFor: sourceAccount,
+      });
+      const sent = rpcMock.sendTransaction.mock.calls[0][0];
+      // 1 op: base fee 100 * (1 + 1) + 60,000 resource fee.
+      expect(sent.fee).toBe(String(100 * 2 + 60_000));
+    });
+
+    it("submit wraps the signed tx in a sponsor fee-bump", async () => {
+      const { xdr, sourceAccount, hash } = buildUnsignedXdr();
+      await service.prepare({ unsignedXdr: xdr }, IP, undefined, {
+        sponsorFor: sourceAccount,
+      });
+      rpcMock.sendTransaction.mockImplementation(async (tx) => ({
+        status: "PENDING",
+        hash: tx.hash().toString("hex"),
+      }));
+      rpcMock.getTransaction.mockResolvedValue(successResponse());
+
+      const result = await service.submit({ signedXdr: xdr }, IP, undefined, {
+        sponsorFor: sourceAccount,
+      });
+
+      const sent = rpcMock.sendTransaction.mock.calls[0][0];
+      expect(sent).toBeInstanceOf(FeeBumpTransaction);
+      expect(sent.feeSource).toBe(SPONSOR.publicKey());
+      expect(sent.innerTransaction.hash().toString("hex")).toBe(hash);
+      expect(sent.signatures).toHaveLength(1);
+      expect(result.status).toBe("SUCCESS");
+      expect(result.hash).toBe(sent.hash().toString("hex"));
+    });
+
+    it("submit rejects another wallet's tx without consuming its cache entry", async () => {
+      const { xdr, sourceAccount, hash } = buildUnsignedXdr();
+      cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
+
+      await expect(
+        service.submit({ signedXdr: xdr }, IP, undefined, {
+          sponsorFor: Keypair.random().publicKey(),
+        })
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(cache.peek(sourceAccount)?.hash).toBe(hash);
+      expect(rpcMock.sendTransaction).not.toHaveBeenCalled();
+    });
+
+    it("submit refuses when the fee exceeds SPONSOR_MAX_FEE_STROOPS", async () => {
+      service = new TransactionService(
+        rpcMock.service,
+        validator,
+        cache,
+        mapper,
+        dashboardCache as unknown as DashboardCache,
+        makeSponsor(rpcMock.service, { SPONSOR_MAX_FEE_STROOPS: 150 })
+      );
+      const { xdr, sourceAccount, hash } = buildUnsignedXdr();
+      cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
+
+      await expect(
+        service.submit({ signedXdr: xdr }, IP, undefined, {
+          sponsorFor: sourceAccount,
+        })
+      ).rejects.toMatchObject({
+        response: { code: "SPONSOR_FEE_TOO_HIGH" },
+      });
+      expect(rpcMock.sendTransaction).not.toHaveBeenCalled();
+    });
+
+    it("unsponsored submit still rejects client-built fee-bumps", async () => {
+      const kp = Keypair.random();
+      const inner = TransactionBuilder.fromXDR(
+        buildUnsignedXdr().xdr,
+        PASSPHRASE
+      ) as ReturnType<typeof TransactionBuilder.fromXDR> & { sign: unknown };
+      const bump = TransactionBuilder.buildFeeBumpTransaction(
+        kp,
+        "200",
+        inner as Parameters<
+          typeof TransactionBuilder.buildFeeBumpTransaction
+        >[2],
+        PASSPHRASE
+      );
+      await expect(
+        service.submit({ signedXdr: bump.toXDR() }, IP, undefined, {
+          sponsorFor: kp.publicKey(),
+        })
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 

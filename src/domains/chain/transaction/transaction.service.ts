@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  UnprocessableEntityException,
 } from "@nestjs/common";
 import {
   FeeBumpTransaction,
@@ -13,8 +14,9 @@ import {
 } from "@stellar/stellar-sdk";
 import { ErrorCode } from "@neko-protocol/api-contracts";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { SponsorService } from "@core/stellar/sponsor.service";
 import { PreparedTxCache } from "./cache/prepared-tx-cache";
-import { XdrValidator } from "./validation/xdr-validator";
+import { XdrValidator, type ValidatedOp } from "./validation/xdr-validator";
 import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
 import { DashboardCache } from "@domains/platform/dashboard/cache/dashboard-cache";
 import {
@@ -34,6 +36,10 @@ const POLL_INTERVAL_MS = 1_500;
 
 const isProd = () => process.env.NODE_ENV === "production";
 
+export interface RelayOptions {
+  sponsorFor?: string;
+}
+
 @Injectable()
 export class TransactionService {
   private readonly logger = new Logger(TransactionService.name);
@@ -43,7 +49,8 @@ export class TransactionService {
     private readonly validator: XdrValidator,
     private readonly cache: PreparedTxCache,
     private readonly errors: SorobanErrorMapper,
-    private readonly dashboardCache: DashboardCache
+    private readonly dashboardCache: DashboardCache,
+    private readonly sponsor: SponsorService
   ) {}
 
   /**
@@ -73,13 +80,32 @@ export class TransactionService {
   async prepare(
     dto: PrepareTransactionDto,
     ip: string,
-    requestTraceId?: string
+    requestTraceId?: string,
+    opts: RelayOptions = {}
   ): Promise<TransactionPreparedDto> {
     const traceId = requestTraceId ?? randomUUID();
     const start = Date.now();
 
-    const { hash, sourceAccount, passphrase, ops } =
+    const { tx, hash, sourceAccount, passphrase, ops } =
       this.validator.parseAndValidate(dto.unsignedXdr);
+
+    if (opts.sponsorFor !== undefined && sourceAccount !== opts.sponsorFor) {
+      this.logger.warn({
+        event: "prepare_rejected",
+        reason: "source_not_caller_wallet",
+        traceId,
+        ip,
+        sourceAccount,
+      });
+      throw new ForbiddenException({
+        code: ErrorCode.PREPARE_REJECTED,
+        traceId,
+      });
+    }
+
+    if (opts.sponsorFor !== undefined) {
+      await this.assertSponsorable(tx, ops, traceId);
+    }
 
     this.cache.set(sourceAccount, { hash, passphrase });
 
@@ -101,7 +127,8 @@ export class TransactionService {
   async submit(
     dto: SubmitTransactionDto,
     ip: string,
-    requestTraceId?: string
+    requestTraceId?: string,
+    opts: RelayOptions = {}
   ): Promise<TransactionStatusDto> {
     const traceId = requestTraceId ?? randomUUID();
     const start = Date.now();
@@ -144,6 +171,10 @@ export class TransactionService {
       });
     };
 
+    if (opts.sponsorFor !== undefined && sourceAccount !== opts.sponsorFor) {
+      throw reject("source_not_caller_wallet");
+    }
+
     const cached = this.cache.consume(sourceAccount);
     if (!cached) throw reject("prepare_expired_or_missing");
     if (cached.hash !== recomputedHash) throw reject("hash_mismatch");
@@ -155,7 +186,63 @@ export class TransactionService {
       ip,
       sourceAccount,
       hash: recomputedHash,
+      sponsored: opts.sponsorFor !== undefined,
     });
+
+    const outgoing =
+      opts.sponsorFor !== undefined ? this.sponsor.feeBump(tx) : tx;
+    const result = await this.sendAndWait(outgoing, traceId, start);
+    await this.dropDashboardCache(sourceAccount);
+    return result;
+  }
+
+  private async assertSponsorable(
+    tx: Transaction,
+    ops: ValidatedOp[],
+    traceId: string
+  ): Promise<void> {
+    if (ops.some((op) => op.kind !== "invoke")) {
+      throw new UnprocessableEntityException({
+        code: ErrorCode.DISALLOWED_OPERATION,
+        traceId,
+      });
+    }
+
+    let sim: rpc.Api.SimulateTransactionResponse;
+    try {
+      sim = await this.rpc.rpc.simulateTransaction(tx);
+    } catch (err) {
+      this.logger.warn({
+        event: "sponsor_simulation_error",
+        traceId,
+        reason: extractMessage(err),
+      });
+      throw new UnprocessableEntityException({
+        code: ErrorCode.SIMULATION_FAILED,
+        traceId,
+      });
+    }
+    if (rpc.Api.isSimulationError(sim)) {
+      throw new UnprocessableEntityException({
+        code: ErrorCode.SIMULATION_FAILED,
+        traceId,
+        ...(isProd() ? {} : { details: { error: sim.error } }),
+      });
+    }
+
+    this.sponsor.assertResourceFeeMatchesSimulation(
+      tx,
+      Number(sim.minResourceFee)
+    );
+    this.sponsor.quoteFeeBump(tx);
+  }
+
+  async sendAndWait(
+    tx: Transaction | FeeBumpTransaction,
+    traceId: string,
+    start = Date.now()
+  ): Promise<TransactionStatusDto> {
+    const recomputedHash = tx.hash().toString("hex");
 
     let sendResp: rpc.Api.SendTransactionResponse;
     try {
@@ -191,7 +278,6 @@ export class TransactionService {
         outcome: "duplicate",
         durationMs: Date.now() - start,
       });
-      await this.dropDashboardCache(sourceAccount);
       return { ...status, traceId };
     }
 
@@ -204,7 +290,6 @@ export class TransactionService {
       durationMs: Date.now() - start,
       outcome: result.status === "SUCCESS" ? "ok" : "non_success",
     });
-    await this.dropDashboardCache(sourceAccount);
     return { ...result, traceId };
   }
 
