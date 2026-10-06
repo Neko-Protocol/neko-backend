@@ -24,6 +24,7 @@ import { TransactionService } from "./transaction.service";
 import { XdrValidator } from "./validation/xdr-validator";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import { SponsorService } from "@core/stellar/sponsor.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { ConfigService } from "@nestjs/config";
 
 const PASSPHRASE = Networks.PUBLIC;
@@ -152,6 +153,7 @@ describe("TransactionService", () => {
   let mapper: SorobanErrorMapper;
   let service: TransactionService;
   let dashboardCache: { invalidate: jest.Mock };
+  let notifications: { emit: jest.Mock };
   let originalNodeEnv: string | undefined;
 
   beforeAll(() => {
@@ -166,13 +168,15 @@ describe("TransactionService", () => {
     // The dashboard cache is invalidated after a submit; this suite is about
     // the submit path itself, so it only has to accept the call.
     dashboardCache = { invalidate: jest.fn().mockResolvedValue(undefined) };
+    notifications = { emit: jest.fn().mockResolvedValue(undefined) };
     service = new TransactionService(
       rpcMock.service,
       validator,
       cache,
       mapper,
       dashboardCache as unknown as DashboardCache,
-      makeSponsor(rpcMock.service)
+      makeSponsor(rpcMock.service),
+      notifications as unknown as NotificationsService
     );
     originalNodeEnv = process.env.NODE_ENV;
   });
@@ -269,6 +273,33 @@ describe("TransactionService", () => {
       expect(result.status).toBe("SUCCESS");
       expect(result.hash).toBe(hash);
       expect(result.traceId).toBeDefined();
+    });
+
+    it("notifies the signing wallet once a submit settles as SUCCESS", async () => {
+      const { xdr, sourceAccount, hash } = buildUnsignedXdr();
+      cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
+      rpcMock.sendTransaction.mockResolvedValue(pendingSendResponse(hash));
+      rpcMock.getTransaction.mockResolvedValue(successResponse());
+
+      await service.submit({ signedXdr: xdr }, IP);
+
+      expect(notifications.emit).toHaveBeenCalledWith({
+        trigger: "tx_confirmed",
+        walletAddress: sourceAccount,
+        dedupeKey: `tx:${hash}`,
+        params: { hash },
+      });
+    });
+
+    it("does not notify when the transaction fails", async () => {
+      const { xdr, sourceAccount, hash } = buildUnsignedXdr();
+      cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
+      rpcMock.sendTransaction.mockResolvedValue(pendingSendResponse(hash));
+      rpcMock.getTransaction.mockResolvedValue(failedResponse());
+
+      await service.submit({ signedXdr: xdr }, IP);
+
+      expect(notifications.emit).not.toHaveBeenCalled();
     });
 
     // A wallet that just moved funds must not be served its pre-transaction
@@ -662,7 +693,8 @@ describe("TransactionService", () => {
         cache,
         mapper,
         dashboardCache as unknown as DashboardCache,
-        makeSponsor(rpcMock.service, { SPONSOR_MAX_FEE_STROOPS: 150 })
+        makeSponsor(rpcMock.service, { SPONSOR_MAX_FEE_STROOPS: 150 }),
+        notifications as unknown as NotificationsService
       );
       const { xdr, sourceAccount, hash } = buildUnsignedXdr();
       cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
