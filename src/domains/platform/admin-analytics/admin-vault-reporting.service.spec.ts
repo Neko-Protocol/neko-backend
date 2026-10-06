@@ -23,7 +23,6 @@ import type { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 import type { DefindexService } from "@domains/investing/defindex/defindex.service";
 import type { DashboardService } from "@domains/platform/dashboard/dashboard.service";
 
-const ONE_SHARE = 1_000_000_000_000n;
 const ASSET_SCALE = 10_000_000n; // Stellar/Soroban 7-decimal fixed point.
 
 const USDC_ADDRESS = "C_USDC_FAKE";

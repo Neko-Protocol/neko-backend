@@ -6,13 +6,7 @@
 export type MailingMessageKind = "broadcast" | "automation";
 
 export type MailingMessageStatus =
-  | "draft"
-  | "active"
-  | "paused"
-  | "archived"
-  | "sending"
-  | "sent"
-  | "failed";
+  "draft" | "active" | "paused" | "archived" | "sending" | "sent" | "failed";
 
 export type MailingDelayUnit = "minutes" | "hours" | "days";
 

@@ -55,8 +55,7 @@ export interface ReferredBreakdownRow {
 }
 
 type CodeOwner =
-  | { kind: "wallet"; wallet: string }
-  | { kind: "partner"; partnerId: string };
+  { kind: "wallet"; wallet: string } | { kind: "partner"; partnerId: string };
 
 @Injectable()
 export class ReferralsService {

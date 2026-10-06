@@ -1,6 +1,9 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { IsIn, IsOptional, IsString } from "class-validator";
-import { AUDIT_ACTION_TYPES, type AuditActionType } from "@neko-protocol/api-contracts";
+import {
+  AUDIT_ACTION_TYPES,
+  type AuditActionType,
+} from "@neko-protocol/api-contracts";
 
 export class ListTransactionsQueryDto {
   @ApiPropertyOptional({ enum: AUDIT_ACTION_TYPES })

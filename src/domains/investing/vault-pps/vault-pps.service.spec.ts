@@ -18,7 +18,9 @@ import { VaultPpsService } from "./vault-pps.service";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
 
-const { Client: ClientMock } = jest.requireMock("@neko-protocol/defindex-vault") as {
+const { Client: ClientMock } = jest.requireMock(
+  "@neko-protocol/defindex-vault"
+) as {
   Client: jest.Mock;
 };
 const { parseAllVaultIds: parseAllVaultIdsMock } = jest.requireMock(

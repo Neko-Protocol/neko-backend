@@ -23,7 +23,6 @@ if (typeof globalThis.WebSocket === "undefined") {
 }
 
 process.on("unhandledRejection", (reason, promise) => {
-  // eslint-disable-next-line no-console
   console.error(
     JSON.stringify({
       event: "unhandled_rejection",
@@ -36,7 +35,6 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 process.on("uncaughtException", (err) => {
-  // eslint-disable-next-line no-console
   console.error(
     JSON.stringify({
       event: "uncaught_exception",

@@ -55,12 +55,7 @@ export interface DashboardPoolCatalogResponse {
 }
 
 export type DashboardPriceSource =
-  | "reflector"
-  | "swap-kit"
-  | "coingecko"
-  | "horizon"
-  | "fallback"
-  | "unknown";
+  "reflector" | "swap-kit" | "coingecko" | "horizon" | "fallback" | "unknown";
 
 export interface DashboardPricesResponse {
   prices: Record<string, { price: number; source: DashboardPriceSource }>;

@@ -6,7 +6,10 @@ import {
   type PoolInfo,
   type PoolPosition,
 } from "@neko-protocol/orchestrator";
-import { parseAllVaultIds, type StellarPriceService } from "@neko-protocol/keeper";
+import {
+  parseAllVaultIds,
+  type StellarPriceService,
+} from "@neko-protocol/keeper";
 import { Client as DefindexVaultClient } from "@neko-protocol/defindex-vault";
 import { OrchestratorService } from "@core/orchestrator/orchestrator.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";

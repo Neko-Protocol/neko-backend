@@ -8,13 +8,18 @@ import { NOTIFICATION_TRIGGERS } from "../notifications.types";
 
 type Row = Record<string, unknown>;
 
+/** A count query, before or after filters are applied to it. */
+type CountQuery = ReturnType<
+  ReturnType<SupabaseService["client"]["from"]>["select"]
+>;
+
 @Injectable()
 export class NotificationStatsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   private async count(
     table: string,
-    apply: (q: any) => any = (q) => q
+    apply: (q: CountQuery) => CountQuery = (q) => q
   ): Promise<number> {
     const query = apply(
       this.supabase.client.from(table).select("id", {

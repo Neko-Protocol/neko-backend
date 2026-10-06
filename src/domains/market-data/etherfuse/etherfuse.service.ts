@@ -1,6 +1,9 @@
 import { BadGatewayException, Injectable } from "@nestjs/common";
 import { RedisCacheService } from "../../../core/cache/redis-cache.service";
-import { ErrorCode, type EtherfuseYieldEntry } from "@neko-protocol/api-contracts";
+import {
+  ErrorCode,
+  type EtherfuseYieldEntry,
+} from "@neko-protocol/api-contracts";
 import {
   BOND_YIELDS_CACHE_TTL_MS,
   EtherfuseBondYieldsError,
