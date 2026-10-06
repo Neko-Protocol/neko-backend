@@ -20,7 +20,9 @@ export class BlendPoolAdapter {
       let blndPrice = 0;
       try {
         blndPrice = await getBlndPriceUsd(pool.metadata.backstop, this.network);
-      } catch {}
+      } catch {
+        // Price stays 0, which skips emissions APY; base rates are still saved.
+      }
 
       const rows: PoolRateRow[] = [];
 

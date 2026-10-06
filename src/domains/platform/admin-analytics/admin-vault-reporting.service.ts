@@ -106,8 +106,7 @@ export class AdminVaultReportingService {
       const positions: WalletVaultPosition[] = [];
 
       const native = account.balances.find((b) => b.asset_type === "native") as
-        | { balance: string }
-        | undefined;
+        { balance: string } | undefined;
       if (native) {
         const amountTokens = Number(native.balance);
         positions.push({

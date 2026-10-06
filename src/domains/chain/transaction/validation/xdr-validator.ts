@@ -45,7 +45,7 @@ export class XdrValidator {
     let tx: Transaction | FeeBumpTransaction;
     try {
       tx = TransactionBuilder.fromXDR(rawXdr, passphrase);
-    } catch (err) {
+    } catch {
       throw new BadRequestException({ code: ErrorCode.INVALID_XDR });
     }
 

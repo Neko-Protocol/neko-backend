@@ -57,8 +57,8 @@ function makeDb(results: Record<string, DbResult[]>) {
     return builder;
   });
 
-  const rpc = jest.fn(
-    (): Promise<DbResult> => Promise.resolve({ data: [], error: null })
+  const rpc = jest.fn((): Promise<DbResult> =>
+    Promise.resolve({ data: [], error: null })
   );
 
   const supabase = {

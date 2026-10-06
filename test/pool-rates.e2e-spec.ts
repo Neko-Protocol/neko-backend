@@ -55,7 +55,6 @@ jest.mock("@neko-protocol/keeper", () => ({
   getVaultContractId: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 import { AppModule } from "../src/app.module";
 import { PoolRatesService } from "../src/modules/pool-rates/pool-rates.service";
 

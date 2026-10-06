@@ -41,7 +41,9 @@ describe("parseCorsOrigins", () => {
 
   it("dedupes repeated origins", () => {
     expect(
-      parseCorsOrigins("https://app.nekoprotocol.xyz,https://app.nekoprotocol.xyz/")
+      parseCorsOrigins(
+        "https://app.nekoprotocol.xyz,https://app.nekoprotocol.xyz/"
+      )
     ).toEqual(["https://app.nekoprotocol.xyz"]);
   });
 
