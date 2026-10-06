@@ -4,8 +4,6 @@ jest.mock("@neko-protocol/keeper", () => ({
   getCurrentNetworkId: () => "PUBLIC",
 }));
 
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { ConfigService } from "@nestjs/config";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { AuditService } from "@domains/platform/audit/audit.service";
@@ -14,45 +12,17 @@ import { AdminWalletBalanceService } from "../triggers/admin-wallet-balance.serv
 import { MAILING_SENDS_CONFLICT_TARGET } from "../mailing-sends.constants";
 import { MailingEnrollmentService } from "./mailing-enrollment.service";
 
-const MIGRATIONS_DIR = join(
-  __dirname,
-  "../../../../../../web-app/supabase/migrations"
-);
-
 const WALLET = "GDEPOSITOR";
 const AUTOMATION_ID = "11111111-1111-1111-1111-111111111111";
 const DEPOSITED_AT = "2026-09-14T10:00:00.000Z";
 
-function constraintFromMigrations(): string {
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-
-  let columns: string | null = null;
-  for (const file of files) {
-    const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
-    const table =
-      /create table (?:if not exists )?public\.mailing_sends\b[\s\S]*?\n\);/i.exec(
-        sql
-      );
-    if (table) {
-      const inline = /\n\s*unique \(([^)]+)\)/i.exec(table[0]);
-      if (inline) columns = inline[1];
-    }
-    const added = [
-      ...sql.matchAll(
-        /alter table public\.mailing_sends\s+add constraint \S+\s+unique \(([^)]+)\)/gi
-      ),
-    ];
-    if (added.length) columns = added[added.length - 1][1];
-  }
-
-  if (!columns) throw new Error("no unique constraint found for mailing_sends");
-  return columns
-    .split(",")
-    .map((c) => c.trim())
-    .join(",");
-}
+/**
+ * The unique key on public.mailing_sends, as the migrations declare it:
+ * neko-web supabase/migrations/0017_mailing_recurring_alerts.sql adds
+ * mailing_sends_message_id_email_trigger_at_key. The migrations moved to the
+ * neko-web repo, so this suite can no longer read them from disk.
+ */
+const DECLARED_UNIQUE_KEY = "message_id,email,trigger_at";
 
 type UpsertCall = { rows: Record<string, unknown>[]; onConflict: string };
 
@@ -157,7 +127,7 @@ function build(calls: UpsertCall[], constraint: string, floor?: string) {
 }
 
 describe("MailingEnrollmentService", () => {
-  const constraint = constraintFromMigrations();
+  const constraint = DECLARED_UNIQUE_KEY;
 
   it("targets the unique key the migrations actually declare", () => {
     expect(MAILING_SENDS_CONFLICT_TARGET).toBe(constraint);

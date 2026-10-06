@@ -1,3 +1,11 @@
+// @blend-capital/blend-sdk bundles a @stellar/stellar-sdk whose CommonJS build
+// requires ESM-only files. Node 24 can load them, Jest cannot. Nothing in this
+// suite exercises Blend, so it is replaced before anything imports it.
+jest.mock("@blend-capital/blend-sdk", () => ({
+  PoolV2: { load: jest.fn() },
+  Backstop: { load: jest.fn() },
+}));
+
 import { ConfigService } from "@nestjs/config";
 import { RedisCacheService } from "@core/cache/redis-cache.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
