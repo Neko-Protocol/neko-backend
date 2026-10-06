@@ -23,6 +23,7 @@ import {
   decodeTransactionResultXdr,
   formatDecodedResult,
 } from "@shared/stellar/errors/transaction-result.decoder";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { PrepareTransactionDto } from "./dto/prepare-transaction.dto";
 import { SubmitTransactionDto } from "./dto/submit-transaction.dto";
 import { TransactionPreparedDto } from "./dto/transaction-prepared.dto";
@@ -50,8 +51,23 @@ export class TransactionService {
     private readonly cache: PreparedTxCache,
     private readonly errors: SorobanErrorMapper,
     private readonly dashboardCache: DashboardCache,
-    private readonly sponsor: SponsorService
+    private readonly sponsor: SponsorService,
+    private readonly notifications: NotificationsService
   ) {}
+
+  /**
+   * In-app + push "transaction confirmed" for the wallet that signed it.
+   * Deduped per hash, so a resubmitted transaction notifies once. Not awaited:
+   * the relay response shouldn't wait on notification delivery.
+   */
+  private notifyConfirmed(wallet: string, hash: string): void {
+    void this.notifications.emit({
+      trigger: "tx_confirmed",
+      walletAddress: wallet,
+      dedupeKey: `tx:${hash}`,
+      params: { hash },
+    });
+  }
 
   /**
    * Drops this wallet's cached dashboard entries after it moves funds.
@@ -193,6 +209,9 @@ export class TransactionService {
       opts.sponsorFor !== undefined ? this.sponsor.feeBump(tx) : tx;
     const result = await this.sendAndWait(outgoing, traceId, start);
     await this.dropDashboardCache(sourceAccount);
+    if (result.status === "SUCCESS") {
+      this.notifyConfirmed(sourceAccount, result.hash);
+    }
     return result;
   }
 

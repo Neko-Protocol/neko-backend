@@ -40,12 +40,21 @@ import {
   getVaultRebalanceConfig,
 } from "@neko-protocol/keeper";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { VaultInvestService } from "./vault-invest.service";
+import type { VaultKeeperResult } from "./keeper/types";
 
 describe("VaultInvestService", () => {
   // Throwaway keypair: the keeper only needs a decodable seed to reach the
   // balance guard, and no test submits a transaction.
   const VALID_SECRET = Keypair.random().secret();
+
+  const notificationsStub = {
+    vaultDepositors: jest
+      .fn()
+      .mockResolvedValue(["GDEPOSITOR1", "GDEPOSITOR2"]),
+    emit: jest.fn().mockResolvedValue(undefined),
+  };
 
   const stellarStub = {
     horizon: {
@@ -71,9 +80,55 @@ describe("VaultInvestService", () => {
       providers: [
         VaultInvestService,
         { provide: StellarRpcService, useValue: stellarStub },
+        { provide: NotificationsService, useValue: notificationsStub },
       ],
     }).compile();
   }
+
+  describe("vault run notifications", () => {
+    const vaultResult = (
+      vaultId: string,
+      attempted: boolean,
+      status: string
+    ): VaultKeeperResult =>
+      ({
+        vaultId,
+        label: `Vault ${vaultId}`,
+        success: true,
+        rebalance: { attempted, status },
+        warnings: [],
+      }) as unknown as VaultKeeperResult;
+
+    beforeEach(() => {
+      notificationsStub.vaultDepositors.mockClear();
+      notificationsStub.emit.mockClear();
+    });
+
+    it("notifies every depositor of a vault whose rebalance landed, deduped per day", async () => {
+      const mod = await buildModule();
+      const service = mod.get(VaultInvestService) as unknown as {
+        notifyVaultRuns(vaults: VaultKeeperResult[]): void;
+      };
+
+      service.notifyVaultRuns([
+        vaultResult("CRAN", true, "SUCCESS"),
+        vaultResult("CSKIPPED", false, "skipped_cooldown"),
+        vaultResult("CFAILED", true, "FAILED"),
+      ]);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const day = new Date().toISOString().slice(0, 10);
+      expect(notificationsStub.vaultDepositors).toHaveBeenCalledTimes(1);
+      expect(notificationsStub.vaultDepositors).toHaveBeenCalledWith("CRAN");
+      expect(notificationsStub.emit).toHaveBeenCalledTimes(2);
+      expect(notificationsStub.emit).toHaveBeenCalledWith({
+        trigger: "vault_run",
+        walletAddress: "GDEPOSITOR1",
+        dedupeKey: `vault_run:CRAN:${day}`,
+        params: { vault: "Vault CRAN" },
+      });
+    });
+  });
 
   it("runBatch returns an empty result when no vaults are configured", async () => {
     const mod = await buildModule();
