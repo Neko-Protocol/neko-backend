@@ -31,6 +31,7 @@ import { TransactionService } from "@domains/chain/transaction/transaction.servi
 import { AccountsService } from "./accounts.service";
 import { WalletActivationService } from "./wallet-activation.service";
 import { ActivationSubmitDto } from "./dto/activation-submit.dto";
+import { TrustlinesPrepareDto } from "./dto/trustlines-prepare.dto";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
 
 /**
@@ -100,6 +101,49 @@ export class AccountsController {
     @Req() req: Request
   ) {
     return this.activation.submit(principal, dto.signedXdr, req.traceId);
+  }
+
+  @Post("wallet/trustlines/prepare")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Sponsor-signed XDR opening trustlines the caller's activated wallet needs.",
+  })
+  @ApiResponse({
+    status: 409,
+    description: "WALLET_NOT_ACTIVATED / TRUSTLINE_EXISTS",
+  })
+  @ApiResponse({
+    status: 422,
+    description: "DISALLOWED_OPERATION (asset not sponsorable)",
+  })
+  @ApiResponse({
+    status: 503,
+    description: "SPONSOR_UNAVAILABLE / SPONSOR_BUSY",
+  })
+  @Throttle({ default: { limit: 10, ttl: 300_000 } })
+  prepareTrustlines(
+    @PrivyPrincipal() principal: Principal,
+    @Body() dto: TrustlinesPrepareDto
+  ) {
+    return this.activation.prepareTrustlines(principal, dto.assets);
+  }
+
+  @Post("wallet/trustlines/submit")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Submit the co-signed trustlines transaction." })
+  @ApiResponse({ status: 403, description: "ACTIVATION_TX_MISMATCH" })
+  @Throttle({ default: { limit: 10, ttl: 300_000 } })
+  submitTrustlines(
+    @PrivyPrincipal() principal: Principal,
+    @Body() dto: ActivationSubmitDto,
+    @Req() req: Request
+  ) {
+    return this.activation.submitTrustlines(
+      principal,
+      dto.signedXdr,
+      req.traceId
+    );
   }
 
   @Post("tx/prepare")
