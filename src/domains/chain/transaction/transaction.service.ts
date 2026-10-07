@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  ConflictException,
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -14,7 +15,11 @@ import {
 } from "@stellar/stellar-sdk";
 import { ErrorCode } from "@neko-protocol/api-contracts";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
-import { SponsorService } from "@core/stellar/sponsor.service";
+import { SponsorService, assetId } from "@core/stellar/sponsor.service";
+import {
+  TRUSTLINES_REQUIRED,
+  TrustlineResolver,
+} from "@core/stellar/trustline-resolver";
 import { PreparedTxCache } from "./cache/prepared-tx-cache";
 import { XdrValidator, type ValidatedOp } from "./validation/xdr-validator";
 import { SorobanErrorMapper } from "./errors/soroban-error.mapper";
@@ -50,7 +55,8 @@ export class TransactionService {
     private readonly cache: PreparedTxCache,
     private readonly errors: SorobanErrorMapper,
     private readonly dashboardCache: DashboardCache,
-    private readonly sponsor: SponsorService
+    private readonly sponsor: SponsorService,
+    private readonly trustlines: TrustlineResolver
   ) {}
 
   /**
@@ -223,6 +229,7 @@ export class TransactionService {
       });
     }
     if (rpc.Api.isSimulationError(sim)) {
+      await this.assertNoMissingTrustlines(tx, sim, traceId);
       throw new UnprocessableEntityException({
         code: ErrorCode.SIMULATION_FAILED,
         traceId,
@@ -235,6 +242,34 @@ export class TransactionService {
       Number(sim.minResourceFee)
     );
     this.sponsor.quoteFeeBump(tx);
+  }
+
+  private async assertNoMissingTrustlines(
+    tx: Transaction,
+    sim: rpc.Api.SimulateTransactionResponse,
+    traceId: string
+  ): Promise<void> {
+    const contracts = this.trustlines.missingTrustlineContracts(sim, tx.source);
+    if (contracts.length === 0) return;
+
+    const assets: string[] = [];
+    for (const contractId of contracts) {
+      const asset = await this.trustlines.assetForContract(contractId);
+      if (asset) assets.push(assetId(asset));
+    }
+    if (assets.length === 0) return;
+
+    this.logger.log({
+      event: "prepare_trustlines_required",
+      traceId,
+      sourceAccount: tx.source,
+      assets,
+    });
+    throw new ConflictException({
+      code: TRUSTLINES_REQUIRED,
+      traceId,
+      publicDetails: { assets },
+    });
   }
 
   async sendAndWait(

@@ -6,14 +6,18 @@ import {
 } from "@nestjs/common";
 import {
   Account,
+  Address,
+  Asset,
   BASE_FEE,
   Contract,
   FeeBumpTransaction,
   Keypair,
   Networks,
   Operation,
+  nativeToScVal,
   rpc,
   SorobanDataBuilder,
+  StrKey,
   TransactionBuilder,
   xdr,
 } from "@stellar/stellar-sdk";
@@ -23,6 +27,7 @@ import { DashboardCache } from "@domains/platform/dashboard/cache/dashboard-cach
 import { TransactionService } from "./transaction.service";
 import { XdrValidator } from "./validation/xdr-validator";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { TrustlineResolver } from "@core/stellar/trustline-resolver";
 import { SponsorService } from "@core/stellar/sponsor.service";
 import { ConfigService } from "@nestjs/config";
 
@@ -172,7 +177,8 @@ describe("TransactionService", () => {
       cache,
       mapper,
       dashboardCache as unknown as DashboardCache,
-      makeSponsor(rpcMock.service)
+      makeSponsor(rpcMock.service),
+      new TrustlineResolver(rpcMock.service)
     );
     originalNodeEnv = process.env.NODE_ENV;
   });
@@ -574,6 +580,57 @@ describe("TransactionService", () => {
       expect(cache.peek(sourceAccount)).toBeUndefined();
     });
 
+    it("prepare names the trustlines a failed simulation needs", async () => {
+      const { xdr: unsignedXdr, sourceAccount } = buildUnsignedXdr();
+      const cetes = new Asset("CETES", Keypair.random().publicKey());
+      const sac = cetes.contractId(PASSPHRASE);
+      const missing = new xdr.DiagnosticEvent({
+        inSuccessfulContractCall: false,
+        event: new xdr.ContractEvent({
+          ext: new xdr.ExtensionPoint(0),
+          contractId: StrKey.decodeContract(sac) as unknown as xdr.Hash,
+          type: xdr.ContractEventType.diagnostic(),
+          body: new xdr.ContractEventBody(
+            0,
+            new xdr.ContractEventV0({
+              topics: [xdr.ScVal.scvSymbol("error")],
+              data: xdr.ScVal.scvVec([
+                xdr.ScVal.scvString("trustline entry is missing for account"),
+                new Address(sourceAccount).toScVal(),
+              ]),
+            })
+          ),
+        }),
+      });
+      rpcMock.simulateTransaction
+        .mockResolvedValueOnce({
+          error: "HostError: Error(Contract, #13)",
+          events: [missing],
+          latestLedger: 1,
+        })
+        .mockResolvedValueOnce({
+          latestLedger: 1,
+          minResourceFee: "0",
+          transactionData: "",
+          events: [],
+          result: {
+            auth: [],
+            retval: nativeToScVal(`CETES:${cetes.getIssuer()}`),
+          },
+        });
+
+      await expect(
+        service.prepare({ unsignedXdr }, IP, undefined, {
+          sponsorFor: sourceAccount,
+        })
+      ).rejects.toMatchObject({
+        response: {
+          code: "TRUSTLINES_REQUIRED",
+          publicDetails: { assets: [`CETES:${cetes.getIssuer()}`] },
+        },
+      });
+    });
+
     it("prepare rejects a declared resource fee far above the simulation", async () => {
       // Simulation needs 50,000; allowed is 50,000 * 1.5 + 100,000 = 175,000.
       const { xdr, sourceAccount } = buildSorobanXdr(400_000);
@@ -662,7 +719,8 @@ describe("TransactionService", () => {
         cache,
         mapper,
         dashboardCache as unknown as DashboardCache,
-        makeSponsor(rpcMock.service, { SPONSOR_MAX_FEE_STROOPS: 150 })
+        makeSponsor(rpcMock.service, { SPONSOR_MAX_FEE_STROOPS: 150 }),
+        new TrustlineResolver(rpcMock.service)
       );
       const { xdr, sourceAccount, hash } = buildUnsignedXdr();
       cache.set(sourceAccount, { hash, passphrase: PASSPHRASE });
