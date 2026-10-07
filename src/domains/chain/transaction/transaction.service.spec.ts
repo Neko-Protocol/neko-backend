@@ -543,6 +543,97 @@ describe("TransactionService", () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    describe("classic swaps (SDEX routes)", () => {
+      const REFERRAL = Keypair.random().publicKey();
+      const USDC = new Asset("USDC", Keypair.random().publicKey());
+
+      function classicSwap(
+        user: Account,
+        opts: { to?: string; feeTo?: string } = {}
+      ) {
+        const builder = new TransactionBuilder(user, {
+          fee: BASE_FEE,
+          networkPassphrase: PASSPHRASE,
+        }).addOperation(
+          Operation.pathPaymentStrictSend({
+            sendAsset: Asset.native(),
+            sendAmount: "10",
+            destination: opts.to ?? user.accountId(),
+            destAsset: USDC,
+            destMin: "1",
+            path: [],
+          })
+        );
+        if (opts.feeTo) {
+          builder.addOperation(
+            Operation.payment({
+              destination: opts.feeTo,
+              asset: USDC,
+              amount: "0.01",
+            })
+          );
+        }
+        return builder.setTimeout(30).build().toXDR();
+      }
+
+      beforeEach(() => {
+        service = new TransactionService(
+          rpcMock.service,
+          validator,
+          cache,
+          mapper,
+          dashboardCache as unknown as DashboardCache,
+          makeSponsor(rpcMock.service, { SWAP_REFERRAL_ADDRESS: REFERRAL }),
+          new TrustlineResolver(rpcMock.service)
+        );
+      });
+
+      it("sponsors a path payment to the user, with the referral fee", async () => {
+        const user = new Account(Keypair.random().publicKey(), "0");
+        await expect(
+          service.prepare(
+            { unsignedXdr: classicSwap(user, { feeTo: REFERRAL }) },
+            IP,
+            undefined,
+            { sponsorFor: user.accountId() }
+          )
+        ).resolves.toMatchObject({ ok: true });
+        expect(rpcMock.simulateTransaction).not.toHaveBeenCalled();
+      });
+
+      it("refuses a path payment to someone else", async () => {
+        const user = new Account(Keypair.random().publicKey(), "0");
+        await expect(
+          service.prepare(
+            {
+              unsignedXdr: classicSwap(user, {
+                to: Keypair.random().publicKey(),
+              }),
+            },
+            IP,
+            undefined,
+            { sponsorFor: user.accountId() }
+          )
+        ).rejects.toMatchObject({ response: { code: "DISALLOWED_OPERATION" } });
+      });
+
+      it("refuses a fee payment to anyone but the referral address", async () => {
+        const user = new Account(Keypair.random().publicKey(), "0");
+        await expect(
+          service.prepare(
+            {
+              unsignedXdr: classicSwap(user, {
+                feeTo: Keypair.random().publicKey(),
+              }),
+            },
+            IP,
+            undefined,
+            { sponsorFor: user.accountId() }
+          )
+        ).rejects.toMatchObject({ response: { code: "DISALLOWED_OPERATION" } });
+      });
+    });
+
     it("prepare refuses to sponsor plain payments", async () => {
       const account = new Account(Keypair.random().publicKey(), "0");
       const payment = new TransactionBuilder(account, {

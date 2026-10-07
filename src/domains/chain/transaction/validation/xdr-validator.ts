@@ -21,7 +21,17 @@ import {
 
 export type ValidatedOp =
   | { kind: "invoke"; contractId: string; label: string; fnName: string }
-  | { kind: "payment"; destination: string; assetCode: string };
+  | {
+      kind: "payment";
+      destination: string;
+      assetCode: string;
+      source?: string;
+    }
+  | {
+      kind: "pathPayment";
+      destination: string;
+      source?: string;
+    };
 
 export interface ValidatedXdr {
   tx: Transaction;
@@ -83,6 +93,17 @@ export class XdrValidator {
         kind: "payment",
         destination: payment.destination,
         assetCode,
+        source: payment.source,
+      };
+    }
+    if (
+      op.type === "pathPaymentStrictSend" ||
+      op.type === "pathPaymentStrictReceive"
+    ) {
+      return {
+        kind: "pathPayment",
+        destination: op.destination,
+        source: op.source,
       };
     }
     throw new UnprocessableEntityException({

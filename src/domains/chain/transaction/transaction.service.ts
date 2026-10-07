@@ -122,7 +122,7 @@ export class TransactionService {
       sourceAccount,
       hash,
       opsCount: ops.length,
-      labels: ops.map((o) => (o.kind === "invoke" ? o.label : "payment")),
+      labels: ops.map((o) => (o.kind === "invoke" ? o.label : o.kind)),
       durationMs: Date.now() - start,
       outcome: "ok",
     });
@@ -207,6 +207,11 @@ export class TransactionService {
     ops: ValidatedOp[],
     traceId: string
   ): Promise<void> {
+    if (ops.every((op) => op.kind !== "invoke")) {
+      this.assertSponsorableClassicSwap(tx, ops, traceId);
+      this.sponsor.quoteFeeBump(tx);
+      return;
+    }
     if (ops.some((op) => op.kind !== "invoke")) {
       throw new UnprocessableEntityException({
         code: ErrorCode.DISALLOWED_OPERATION,
@@ -242,6 +247,42 @@ export class TransactionService {
       Number(sim.minResourceFee)
     );
     this.sponsor.quoteFeeBump(tx);
+  }
+
+  private assertSponsorableClassicSwap(
+    tx: Transaction,
+    ops: ValidatedOp[],
+    traceId: string
+  ): void {
+    const user = tx.source;
+    const referral = this.sponsor.swapReferralAddress();
+    const fromUser = (op: { source?: string }) =>
+      op.source === undefined || op.source === user;
+
+    const allowed =
+      ops.some((op) => op.kind === "pathPayment") &&
+      ops.every((op) => {
+        if (!fromUser(op as { source?: string })) return false;
+        if (op.kind === "pathPayment") return op.destination === user;
+        if (op.kind === "payment") {
+          return referral !== null && op.destination === referral;
+        }
+        return false;
+      }) &&
+      ops.filter((op) => op.kind === "payment").length <= 1;
+
+    if (!allowed) {
+      this.logger.warn({
+        event: "sponsor_classic_rejected",
+        traceId,
+        sourceAccount: user,
+        ops: ops.map((op) => op.kind),
+      });
+      throw new UnprocessableEntityException({
+        code: ErrorCode.DISALLOWED_OPERATION,
+        traceId,
+      });
+    }
   }
 
   private async assertNoMissingTrustlines(
