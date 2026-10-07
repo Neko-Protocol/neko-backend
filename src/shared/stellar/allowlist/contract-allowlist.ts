@@ -69,6 +69,15 @@ export const CONTRACT_ALLOWLIST: ReadonlyMap<string, ContractLabel> = new Map([
     "vault:TESOURO-blend",
   ],
 
+  [
+    "CAG5LRYQ5JVEUI5TEID72EYOVX44TTUJT5BQR2J6J77FH65PCCFAJDDH",
+    "soroswap:router",
+  ],
+  [
+    "CAYP3UWLJM7ZPTUKL6R6BFGTRWLZ46LRKOXTERI2K6BIJAWGYY62TXTO",
+    "soroswap:aggregator",
+  ],
+  ["CCKXBE5GKJOCE7IKL64HLYKW3IJSUPVOLC4CS77GQT5QQHDZLDYV3DFT", "xbull:router"],
   // ── Aqua AMM ───────────────────────────────────────────────────────────────
   ["CBQDHNBFBZYE4MKPWBSJOPIYLW4SFSXAXUTSXJN76GNKYVYPCKWC6QUK", "aqua:router"],
   ["CA6GAFOJCW4MGQQBUCQUSA3CLIH25G4SNKB2JHYKZCVWZTNW5VXMSC4O", "aqua:pool:01"],
@@ -116,6 +125,7 @@ export const ALLOWED_FUNCTION_NAMES: ReadonlySet<string> = new Set([
   "swap_exact_tokens_for_tokens",
   "swap_tokens_for_exact_tokens",
   "swap_chained",
+  "strict_send",
   // DeFindex
   "invest",
   "rescue",
