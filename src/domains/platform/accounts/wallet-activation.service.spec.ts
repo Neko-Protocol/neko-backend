@@ -6,6 +6,7 @@ import {
   Keypair,
   Networks,
   NotFoundError,
+  Operation,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 import { assertActivationOnly } from "@neko-protocol/wallet-core";
@@ -13,6 +14,7 @@ import { createMockWallet } from "@neko-protocol/wallet-core/mock";
 import { PrivyService } from "@core/privy/privy.service";
 import { SponsorService } from "@core/stellar/sponsor.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { TrustlineResolver } from "@core/stellar/trustline-resolver";
 import { TransactionService } from "@domains/chain/transaction/transaction.service";
 import { FakeSupabase } from "../../../../test/helpers/fake-supabase";
 import { AccountsService } from "./accounts.service";
@@ -38,6 +40,7 @@ function setup(
     sendStatus?: "SUCCESS" | "FAILED" | "PENDING";
     userSponsor?: string;
     dailyCap?: number;
+    maxTrustlines?: number;
   } = {}
 ) {
   const user = createMockWallet();
@@ -48,6 +51,7 @@ function setup(
     SPONSOR_SECRET_KEY: SPONSOR.secret(),
     SPONSOR_TRUSTLINES: USDC_ID,
     SPONSOR_DAILY_ACTIVATION_CAP: opts.dailyCap ?? 100,
+    SPONSOR_MAX_TRUSTLINES_PER_WALLET: opts.maxTrustlines,
   };
   const config = { get: (k: string) => env[k] } as unknown as ConfigService;
 
@@ -90,7 +94,8 @@ function setup(
     stellar,
     { sendAndWait } as unknown as TransactionService,
     db.asService(),
-    config
+    config,
+    new TrustlineResolver(stellar)
   );
   /** Signs up another Privy user with their own wallet. */
   const addUser = async (userId: string) => {
@@ -322,4 +327,104 @@ describe("WalletActivationService", () => {
       expect(db.rows("wallet_activations")[0].sponsor_address).toBe(expected);
     }
   );
+
+  describe("trustlines", () => {
+    const CETES_ID =
+      "CETES:GCRYUGD5NVARGXT56XEZI5CIFCQETYHAPQQTHO2O3IQZTHDH4LATMYWC";
+    const USDC_BALANCE = {
+      asset_type: "credit_alphanum4",
+      asset_code: "USDC",
+      asset_issuer: USDC.getIssuer(),
+      balance: "0",
+    };
+
+    async function activated(opts: Parameters<typeof setup>[0] = {}) {
+      const ctx = setup({
+        userOnChain: [{ asset_type: "native", balance: "0" }, USDC_BALANCE],
+        ...opts,
+      });
+      await ctx.accounts.bootstrap(PRINCIPAL);
+      await ctx.service.prepare(PRINCIPAL).catch(() => undefined);
+      return ctx;
+    }
+
+    it("prepare -> sign -> submit opens a sponsored trustline", async () => {
+      const { user, service, sendAndWait } = await activated();
+
+      const prepared = await service.prepareTrustlines(PRINCIPAL, [CETES_ID]);
+      const tx = TransactionBuilder.fromXDR(prepared.xdr, PASSPHRASE);
+      expect(tx.operations.map((o) => o.type)).toEqual([
+        "beginSponsoringFutureReserves",
+        "changeTrust",
+        "endSponsoringFutureReserves",
+      ]);
+      expect(() =>
+        assertActivationOnly({
+          xdr: prepared.xdr,
+          networkPassphrase: PASSPHRASE,
+          sponsor: SPONSOR.publicKey(),
+          user: user.address,
+          allowedTrustlines: [CETES_ID],
+        })
+      ).not.toThrow();
+
+      const signed = await user.signTransaction(prepared.xdr, {
+        networkPassphrase: PASSPHRASE,
+      });
+      const res = await service.submitTrustlines(PRINCIPAL, signed);
+      expect(res.status).toBe("SUCCESS");
+      expect(sendAndWait).toHaveBeenCalledTimes(1);
+    });
+
+    it("sponsors any classic asset, not just a list", async () => {
+      const { service } = await activated();
+      const any = `ANY:${Keypair.random().publicKey()}`;
+      const prepared = await service.prepareTrustlines(PRINCIPAL, [any]);
+      const tx = TransactionBuilder.fromXDR(prepared.xdr, PASSPHRASE);
+      expect(tx.operations[1]).toMatchObject({ type: "changeTrust" });
+    });
+
+    it("refuses past the per-wallet trustline cap", async () => {
+      const { service } = await activated({ maxTrustlines: 1 });
+      await expect(
+        service.prepareTrustlines(PRINCIPAL, [CETES_ID])
+      ).rejects.toMatchObject({
+        response: { code: "TRUSTLINE_LIMIT_REACHED" },
+      });
+    });
+
+    it("answers TRUSTLINE_EXISTS when nothing is missing", async () => {
+      const { service } = await activated();
+      await expect(
+        service.prepareTrustlines(PRINCIPAL, [USDC_ID])
+      ).rejects.toMatchObject({ response: { code: "TRUSTLINE_EXISTS" } });
+    });
+
+    it("refuses a wallet that is not activated", async () => {
+      const { accounts, service } = setup();
+      await accounts.bootstrap(PRINCIPAL);
+      await expect(
+        service.prepareTrustlines(PRINCIPAL, [CETES_ID])
+      ).rejects.toMatchObject({ response: { code: "WALLET_NOT_ACTIVATED" } });
+    });
+
+    it("rejects a submit that differs from what was prepared", async () => {
+      const { service } = await activated();
+      await service.prepareTrustlines(PRINCIPAL, [CETES_ID]);
+      const other = new TransactionBuilder(
+        new Account(SPONSOR.publicKey(), "1"),
+        { fee: "100", networkPassphrase: PASSPHRASE }
+      )
+        .addOperation(
+          Operation.changeTrust({
+            asset: new Asset("JUNK", Keypair.random().publicKey()),
+          })
+        )
+        .setTimeout(30)
+        .build();
+      await expect(
+        service.submitTrustlines(PRINCIPAL, other.toXDR())
+      ).rejects.toMatchObject({ response: { code: "ACTIVATION_TX_MISMATCH" } });
+    });
+  });
 });

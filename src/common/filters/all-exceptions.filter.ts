@@ -72,6 +72,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       code: typeof obj.code === "string" ? obj.code : ErrorCode.ERROR,
       message: typeof obj.message === "string" ? obj.message : fallbackMessage,
       traceId: typeof obj.traceId === "string" ? obj.traceId : traceId,
+      ...(obj.publicDetails !== undefined
+        ? { details: obj.publicDetails }
+        : {}),
       ...(obj.details !== undefined && !isProd()
         ? { details: obj.details }
         : {}),

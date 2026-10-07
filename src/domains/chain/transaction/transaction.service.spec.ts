@@ -6,14 +6,18 @@ import {
 } from "@nestjs/common";
 import {
   Account,
+  Address,
+  Asset,
   BASE_FEE,
   Contract,
   FeeBumpTransaction,
   Keypair,
   Networks,
   Operation,
+  nativeToScVal,
   rpc,
   SorobanDataBuilder,
+  StrKey,
   TransactionBuilder,
   xdr,
 } from "@stellar/stellar-sdk";
@@ -23,6 +27,7 @@ import { DashboardCache } from "@domains/platform/dashboard/cache/dashboard-cach
 import { TransactionService } from "./transaction.service";
 import { XdrValidator } from "./validation/xdr-validator";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { TrustlineResolver } from "@core/stellar/trustline-resolver";
 import { SponsorService } from "@core/stellar/sponsor.service";
 import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { ConfigService } from "@nestjs/config";
@@ -176,6 +181,7 @@ describe("TransactionService", () => {
       mapper,
       dashboardCache as unknown as DashboardCache,
       makeSponsor(rpcMock.service),
+      new TrustlineResolver(rpcMock.service),
       notifications as unknown as NotificationsService
     );
     originalNodeEnv = process.env.NODE_ENV;
@@ -568,6 +574,97 @@ describe("TransactionService", () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    describe("classic swaps (SDEX routes)", () => {
+      const REFERRAL = Keypair.random().publicKey();
+      const USDC = new Asset("USDC", Keypair.random().publicKey());
+
+      function classicSwap(
+        user: Account,
+        opts: { to?: string; feeTo?: string } = {}
+      ) {
+        const builder = new TransactionBuilder(user, {
+          fee: BASE_FEE,
+          networkPassphrase: PASSPHRASE,
+        }).addOperation(
+          Operation.pathPaymentStrictSend({
+            sendAsset: Asset.native(),
+            sendAmount: "10",
+            destination: opts.to ?? user.accountId(),
+            destAsset: USDC,
+            destMin: "1",
+            path: [],
+          })
+        );
+        if (opts.feeTo) {
+          builder.addOperation(
+            Operation.payment({
+              destination: opts.feeTo,
+              asset: USDC,
+              amount: "0.01",
+            })
+          );
+        }
+        return builder.setTimeout(30).build().toXDR();
+      }
+
+      beforeEach(() => {
+        service = new TransactionService(
+          rpcMock.service,
+          validator,
+          cache,
+          mapper,
+          dashboardCache as unknown as DashboardCache,
+          makeSponsor(rpcMock.service, { SWAP_REFERRAL_ADDRESS: REFERRAL }),
+          new TrustlineResolver(rpcMock.service)
+        );
+      });
+
+      it("sponsors a path payment to the user, with the referral fee", async () => {
+        const user = new Account(Keypair.random().publicKey(), "0");
+        await expect(
+          service.prepare(
+            { unsignedXdr: classicSwap(user, { feeTo: REFERRAL }) },
+            IP,
+            undefined,
+            { sponsorFor: user.accountId() }
+          )
+        ).resolves.toMatchObject({ ok: true });
+        expect(rpcMock.simulateTransaction).not.toHaveBeenCalled();
+      });
+
+      it("refuses a path payment to someone else", async () => {
+        const user = new Account(Keypair.random().publicKey(), "0");
+        await expect(
+          service.prepare(
+            {
+              unsignedXdr: classicSwap(user, {
+                to: Keypair.random().publicKey(),
+              }),
+            },
+            IP,
+            undefined,
+            { sponsorFor: user.accountId() }
+          )
+        ).rejects.toMatchObject({ response: { code: "DISALLOWED_OPERATION" } });
+      });
+
+      it("refuses a fee payment to anyone but the referral address", async () => {
+        const user = new Account(Keypair.random().publicKey(), "0");
+        await expect(
+          service.prepare(
+            {
+              unsignedXdr: classicSwap(user, {
+                feeTo: Keypair.random().publicKey(),
+              }),
+            },
+            IP,
+            undefined,
+            { sponsorFor: user.accountId() }
+          )
+        ).rejects.toMatchObject({ response: { code: "DISALLOWED_OPERATION" } });
+      });
+    });
+
     it("prepare refuses to sponsor plain payments", async () => {
       const account = new Account(Keypair.random().publicKey(), "0");
       const payment = new TransactionBuilder(account, {
@@ -603,6 +700,57 @@ describe("TransactionService", () => {
         })
       ).rejects.toMatchObject({ response: { code: "SIMULATION_FAILED" } });
       expect(cache.peek(sourceAccount)).toBeUndefined();
+    });
+
+    it("prepare names the trustlines a failed simulation needs", async () => {
+      const { xdr: unsignedXdr, sourceAccount } = buildUnsignedXdr();
+      const cetes = new Asset("CETES", Keypair.random().publicKey());
+      const sac = cetes.contractId(PASSPHRASE);
+      const missing = new xdr.DiagnosticEvent({
+        inSuccessfulContractCall: false,
+        event: new xdr.ContractEvent({
+          ext: new xdr.ExtensionPoint(0),
+          contractId: StrKey.decodeContract(sac) as unknown as xdr.Hash,
+          type: xdr.ContractEventType.diagnostic(),
+          body: new xdr.ContractEventBody(
+            0,
+            new xdr.ContractEventV0({
+              topics: [xdr.ScVal.scvSymbol("error")],
+              data: xdr.ScVal.scvVec([
+                xdr.ScVal.scvString("trustline entry is missing for account"),
+                new Address(sourceAccount).toScVal(),
+              ]),
+            })
+          ),
+        }),
+      });
+      rpcMock.simulateTransaction
+        .mockResolvedValueOnce({
+          error: "HostError: Error(Contract, #13)",
+          events: [missing],
+          latestLedger: 1,
+        })
+        .mockResolvedValueOnce({
+          latestLedger: 1,
+          minResourceFee: "0",
+          transactionData: "",
+          events: [],
+          result: {
+            auth: [],
+            retval: nativeToScVal(`CETES:${cetes.getIssuer()}`),
+          },
+        });
+
+      await expect(
+        service.prepare({ unsignedXdr }, IP, undefined, {
+          sponsorFor: sourceAccount,
+        })
+      ).rejects.toMatchObject({
+        response: {
+          code: "TRUSTLINES_REQUIRED",
+          publicDetails: { assets: [`CETES:${cetes.getIssuer()}`] },
+        },
+      });
     });
 
     it("prepare rejects a declared resource fee far above the simulation", async () => {
@@ -694,6 +842,7 @@ describe("TransactionService", () => {
         mapper,
         dashboardCache as unknown as DashboardCache,
         makeSponsor(rpcMock.service, { SPONSOR_MAX_FEE_STROOPS: 150 }),
+        new TrustlineResolver(rpcMock.service),
         notifications as unknown as NotificationsService
       );
       const { xdr, sourceAccount, hash } = buildUnsignedXdr();

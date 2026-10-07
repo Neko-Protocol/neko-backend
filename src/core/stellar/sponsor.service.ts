@@ -88,6 +88,10 @@ export class SponsorService {
       });
   }
 
+  swapReferralAddress(): string | null {
+    return this.config.get<string>("SWAP_REFERRAL_ADDRESS")?.trim() || null;
+  }
+
   private requireKeypair(): Keypair {
     if (!this.keypair) {
       throw new ServiceUnavailableException({

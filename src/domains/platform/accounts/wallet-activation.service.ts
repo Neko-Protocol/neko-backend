@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   Logger,
   ServiceUnavailableException,
+  UnprocessableEntityException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -17,7 +18,9 @@ import {
 } from "@neko-protocol/api-contracts";
 import { assertActivationOnly } from "@neko-protocol/wallet-core";
 import {
+  Asset,
   FeeBumpTransaction,
+  StrKey,
   Transaction,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
@@ -28,8 +31,10 @@ import {
   assetId,
 } from "@core/stellar/sponsor.service";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { TrustlineResolver } from "@core/stellar/trustline-resolver";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { PreparedTxCache } from "@domains/chain/transaction/cache/prepared-tx-cache";
+import type { TransactionStatusDto } from "@domains/chain/transaction/dto/transaction-status.dto";
 import { TransactionService } from "@domains/chain/transaction/transaction.service";
 import { AccountsService } from "./accounts.service";
 import { ActivationLease } from "./activation-lease";
@@ -38,12 +43,19 @@ const LEASE_MS = (ACTIVATION_TIMEOUT_S + 5) * 1_000;
 const LEASE_WAIT_MS = 15_000;
 const DEFAULT_DAILY_CAP = 100;
 
+export const TRUSTLINE_EXISTS = "TRUSTLINE_EXISTS";
+export const TRUSTLINE_LIMIT_REACHED = "TRUSTLINE_LIMIT_REACHED";
+const DEFAULT_MAX_TRUSTLINES = 20;
+
 type ActivationStatus = "pending" | "activated" | "failed";
 
 @Injectable()
 export class WalletActivationService {
   private readonly logger = new Logger(WalletActivationService.name);
   private readonly prepared = new PreparedTxCache({
+    ttlMs: ACTIVATION_TIMEOUT_S * 1_000,
+  });
+  private readonly preparedTrustlines = new PreparedTxCache({
     ttlMs: ACTIVATION_TIMEOUT_S * 1_000,
   });
   private readonly lease = new ActivationLease(LEASE_MS);
@@ -54,7 +66,8 @@ export class WalletActivationService {
     private readonly stellar: StellarRpcService,
     private readonly transactions: TransactionService,
     private readonly supabase: SupabaseService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly trustlineResolver: TrustlineResolver
   ) {}
 
   async prepare(principal: PrivyPrincipal): Promise<ActivationPrepareResponse> {
@@ -230,6 +243,168 @@ export class WalletActivationService {
 
     const refreshed = await this.accounts.requirePrimaryWallet(principal);
     return { wallet: refreshed, hash };
+  }
+
+  async prepareTrustlines(
+    principal: PrivyPrincipal,
+    requested: string[]
+  ): Promise<ActivationPrepareResponse> {
+    const wallet = await this.accounts.requirePrimaryWallet(principal);
+    if (wallet.activation_status !== "activated") {
+      throw new ConflictException({ code: ErrorCode.WALLET_NOT_ACTIVATED });
+    }
+    if (!this.sponsor.isConfigured()) {
+      throw new ServiceUnavailableException({
+        code: ErrorCode.SPONSOR_UNAVAILABLE,
+      });
+    }
+
+    const assets: Asset[] = [];
+    for (const ref of new Set(requested)) {
+      const asset = await this.resolveAsset(ref);
+      if (!asset) {
+        this.logger.warn({
+          event: "trustline_asset_unresolved",
+          walletId: wallet.id,
+          asset: ref,
+        });
+        throw new UnprocessableEntityException({
+          code: ErrorCode.DISALLOWED_OPERATION,
+          publicDetails: { asset: ref },
+        });
+      }
+      assets.push(asset);
+    }
+
+    const state = await this.sponsor.getAccountState(wallet.address);
+    if (!state.exists) {
+      throw new ConflictException({ code: ErrorCode.WALLET_NOT_ACTIVATED });
+    }
+    const missing = assets.filter((a) => !state.trustlines.has(assetId(a)));
+    if (missing.length === 0) {
+      throw new ConflictException({ code: TRUSTLINE_EXISTS });
+    }
+    const cap = Number(
+      this.config.get("SPONSOR_MAX_TRUSTLINES_PER_WALLET") ??
+        DEFAULT_MAX_TRUSTLINES
+    );
+    if (state.trustlines.size + missing.length > cap) {
+      this.logger.warn({
+        event: "trustline_cap_reached",
+        walletId: wallet.id,
+        cap,
+      });
+      throw new UnprocessableEntityException({
+        code: TRUSTLINE_LIMIT_REACHED,
+      });
+    }
+
+    if (!(await this.lease.acquire(wallet.address, LEASE_WAIT_MS))) {
+      throw new ServiceUnavailableException({ code: ErrorCode.SPONSOR_BUSY });
+    }
+
+    try {
+      await this.sponsor.assertFunded();
+      const tx = await this.sponsor.buildActivation({
+        user: wallet.address,
+        createAccount: false,
+        trustlines: missing,
+      });
+      const passphrase = this.stellar.getNetworkPassphrase();
+      const xdr = tx.toXDR();
+
+      assertActivationOnly({
+        xdr,
+        networkPassphrase: passphrase,
+        sponsor: this.sponsor.address,
+        user: wallet.address,
+        allowedTrustlines: missing.map(assetId),
+      });
+
+      const hash = tx.hash().toString("hex");
+      this.preparedTrustlines.set(wallet.address, { hash, passphrase });
+
+      this.logger.log({
+        event: "trustlines_prepared",
+        walletId: wallet.id,
+        hash,
+        trustlines: missing.map(assetId),
+      });
+
+      return {
+        xdr,
+        hash,
+        network_passphrase: passphrase,
+        sponsor_address: this.sponsor.address,
+      };
+    } catch (err) {
+      this.lease.release(wallet.address);
+      throw err;
+    }
+  }
+
+  async submitTrustlines(
+    principal: PrivyPrincipal,
+    signedXdr: string,
+    requestTraceId?: string
+  ): Promise<TransactionStatusDto> {
+    const traceId = requestTraceId ?? randomUUID();
+    const wallet = await this.accounts.requirePrimaryWallet(principal);
+    try {
+      const passphrase = this.stellar.getNetworkPassphrase();
+      let tx: Transaction | FeeBumpTransaction;
+      try {
+        tx = TransactionBuilder.fromXDR(signedXdr, passphrase);
+      } catch {
+        throw new BadRequestException({ code: ErrorCode.INVALID_XDR, traceId });
+      }
+      const hash = tx.hash().toString("hex");
+      const cached = this.preparedTrustlines.consume(wallet.address);
+      if (
+        tx instanceof FeeBumpTransaction ||
+        !cached ||
+        cached.hash !== hash ||
+        cached.passphrase !== passphrase
+      ) {
+        this.logger.warn({
+          event: "trustlines_submit_rejected",
+          walletId: wallet.id,
+          traceId,
+          reason: !cached ? "prepare_expired_or_missing" : "hash_mismatch",
+        });
+        throw new ForbiddenException({
+          code: ErrorCode.ACTIVATION_TX_MISMATCH,
+          traceId,
+        });
+      }
+
+      const result = await this.transactions.sendAndWait(tx, traceId);
+      this.logger.log({
+        event: "trustlines_submitted",
+        walletId: wallet.id,
+        traceId,
+        hash,
+        status: result.status,
+      });
+      return result;
+    } finally {
+      this.lease.release(wallet.address);
+    }
+  }
+
+  private async resolveAsset(ref: string): Promise<Asset | null> {
+    if (StrKey.isValidContract(ref)) {
+      return this.trustlineResolver.assetForContract(ref);
+    }
+    const [code, issuer] = ref.split(":");
+    if (!code || !issuer || !StrKey.isValidEd25519PublicKey(issuer)) {
+      return null;
+    }
+    try {
+      return new Asset(code, issuer);
+    } catch {
+      return null;
+    }
   }
 
   private async assertUnderDailyCap(wallet: WalletPublic): Promise<void> {
