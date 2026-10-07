@@ -14,11 +14,12 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@blend-capital/blend-sdk": "^3.2.2",
-    "@neko-protocol/api-contracts": "0.2.1",
+    "@neko-protocol/api-contracts": "0.3.0",
     "@neko-protocol/defindex-vault": "0.1.0",
     "@neko-protocol/keeper": "0.1.0",
     "@neko-protocol/orchestrator": "0.1.0",
@@ -88,7 +89,8 @@
         "ts-jest",
         {
           "tsconfig": {
-            "allowJs": true
+            "allowJs": true,
+            "isolatedModules": true
           }
         }
       ]

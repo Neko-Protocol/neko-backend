@@ -1,5 +1,12 @@
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { NotificationsService } from "./notifications.service";
+import { PushService } from "./push/push.service";
+
+function makePush() {
+  return { sendToWallet: jest.fn() } as unknown as PushService & {
+    sendToWallet: jest.Mock;
+  };
+}
 
 type Result = { data?: unknown; error?: unknown; count?: number };
 type Call = { table: string; method: string; args: unknown[] };
@@ -28,6 +35,7 @@ function makeDb(results: Record<string, Result[]>) {
       "is",
       "order",
       "limit",
+      "range",
       "maybeSingle",
     ]) {
       builder[method] = (...args: unknown[]) => {
@@ -63,7 +71,7 @@ describe("NotificationsService.emit", () => {
       notification_messages: [{ data: ACTIVE_MESSAGE }],
       notifications: [{ data: [{ id: "n-1" }] }],
     });
-    const svc = new NotificationsService(db.supabase);
+    const svc = new NotificationsService(db.supabase, makePush());
 
     await svc.emit({
       trigger: "swap_completed",
@@ -98,7 +106,7 @@ describe("NotificationsService.emit", () => {
 
   it("writes nothing when no active message exists for the trigger", async () => {
     const db = makeDb({ notification_messages: [{ data: null }] });
-    const svc = new NotificationsService(db.supabase);
+    const svc = new NotificationsService(db.supabase, makePush());
 
     await svc.emit({
       trigger: "signup",
@@ -114,7 +122,7 @@ describe("NotificationsService.emit", () => {
       notification_messages: [{ data: ACTIVE_MESSAGE }],
       notifications: [{ error: { message: "boom" } }],
     });
-    const svc = new NotificationsService(db.supabase);
+    const svc = new NotificationsService(db.supabase, makePush());
 
     await expect(
       svc.emit({
@@ -127,7 +135,7 @@ describe("NotificationsService.emit", () => {
 
   it("ignores an emit with no wallet or no dedupe key", async () => {
     const db = makeDb({});
-    const svc = new NotificationsService(db.supabase);
+    const svc = new NotificationsService(db.supabase, makePush());
 
     await svc.emit({ trigger: "signup", walletAddress: "", dedupeKey: "x" });
     await svc.emit({ trigger: "signup", walletAddress: "G", dedupeKey: "  " });
@@ -139,7 +147,7 @@ describe("NotificationsService.emit", () => {
 describe("NotificationsService.markRead", () => {
   it("scopes the update to the wallet and to unread rows", async () => {
     const db = makeDb({ notifications: [{ data: [{ id: "n-1" }] }] });
-    const svc = new NotificationsService(db.supabase);
+    const svc = new NotificationsService(db.supabase, makePush());
 
     const result = await svc.markRead("GWALLET", ["n-1", "n-1", "n-2"]);
 
@@ -160,9 +168,105 @@ describe("NotificationsService.markRead", () => {
 
   it("does not issue an update for an empty id list", async () => {
     const db = makeDb({});
-    const svc = new NotificationsService(db.supabase);
+    const svc = new NotificationsService(db.supabase, makePush());
 
     await expect(svc.markRead("GWALLET", [])).resolves.toEqual({ updated: 0 });
     expect(db.calls).toHaveLength(0);
+  });
+});
+
+describe("NotificationsService push channel", () => {
+  it("pushes the same title and body when the in-app row is new", async () => {
+    const db = makeDb({
+      notification_messages: [{ data: ACTIVE_MESSAGE }],
+      notifications: [{ data: [{ id: "n-1" }] }],
+    });
+    const push = makePush();
+    const svc = new NotificationsService(db.supabase, push);
+
+    await svc.emit({
+      trigger: "tx_confirmed",
+      walletAddress: "GWALLET",
+      dedupeKey: "tx:abc",
+      params: { name: "Ana", amount: 5 },
+    });
+
+    expect(push.sendToWallet).toHaveBeenCalledWith("GWALLET", {
+      title: "Welcome, Ana",
+      body: "You swapped 5 today. {{missing}} stays put.",
+      data: { trigger: "tx_confirmed" },
+    });
+  });
+
+  it("does not push again when the dedupe key already exists", async () => {
+    const db = makeDb({
+      notification_messages: [{ data: ACTIVE_MESSAGE }],
+      notifications: [{ data: [] }],
+    });
+    const push = makePush();
+    const svc = new NotificationsService(db.supabase, push);
+
+    await svc.emit({
+      trigger: "tx_confirmed",
+      walletAddress: "GWALLET",
+      dedupeKey: "tx:abc",
+    });
+
+    expect(push.sendToWallet).not.toHaveBeenCalled();
+  });
+
+  it("does not push when the trigger has no active message", async () => {
+    const db = makeDb({ notification_messages: [{ data: null }] });
+    const push = makePush();
+    const svc = new NotificationsService(db.supabase, push);
+
+    await svc.emit({
+      trigger: "vault_run",
+      walletAddress: "GWALLET",
+      dedupeKey: "vault_run:CV:2026-10-06",
+    });
+
+    expect(push.sendToWallet).not.toHaveBeenCalled();
+  });
+});
+
+describe("NotificationsService.vaultDepositors", () => {
+  it("returns each depositing wallet once, filtered by vault", async () => {
+    const db = makeDb({
+      audit_logs: [
+        {
+          data: [
+            { wallet_address: "GA" },
+            { wallet_address: "GB" },
+            { wallet_address: "GA" },
+            { wallet_address: null },
+          ],
+        },
+      ],
+    });
+    const svc = new NotificationsService(db.supabase, makePush());
+
+    const wallets = await svc.vaultDepositors("CVAULT");
+
+    expect(wallets).toEqual(["GA", "GB"]);
+    const eqCalls = db.calls
+      .filter((c) => c.table === "audit_logs" && c.method === "eq")
+      .map((c) => c.args);
+    expect(eqCalls).toEqual([
+      ["action_type", "vaults_deposit"],
+      ["pool_id", "CVAULT"],
+    ]);
+  });
+
+  it("reads every vault when no vault is given", async () => {
+    const db = makeDb({ audit_logs: [{ data: [{ wallet_address: "GA" }] }] });
+    const svc = new NotificationsService(db.supabase, makePush());
+
+    await svc.vaultDepositors();
+
+    const eqCalls = db.calls
+      .filter((c) => c.table === "audit_logs" && c.method === "eq")
+      .map((c) => c.args);
+    expect(eqCalls).toEqual([["action_type", "vaults_deposit"]]);
   });
 });

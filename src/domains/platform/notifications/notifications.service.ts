@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { SupabaseService } from "@core/supabase/supabase.service";
+import { PushService } from "./push/push.service";
 import {
   EmitNotificationInput,
   Notification,
@@ -9,6 +10,9 @@ import {
 type Row = Record<string, unknown>;
 
 const LIST_LIMIT = 50;
+
+/** Page size when reading depositors, under PostgREST's default row cap. */
+const DEPOSITORS_PAGE = 1000;
 
 /** Substitutes `{{name}}` placeholders with caller-supplied params. */
 function substitute(
@@ -32,7 +36,10 @@ function toCategory(raw: unknown): NotificationCategory {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly push: PushService
+  ) {}
 
   /**
    * Writes one in-app notification, in-band with the event that caused it.
@@ -70,21 +77,65 @@ export class NotificationsService {
       if (error || !data) return;
 
       const row = data as Row;
-      await this.insert({
+      const title = substitute(String(row.title ?? ""), input.params);
+      const body = substitute(String(row.body ?? ""), input.params);
+      const created = await this.insert({
         wallet_address: wallet,
         message_id: typeof row.id === "string" ? row.id : null,
-        title: substitute(String(row.title ?? ""), input.params),
-        body: substitute(String(row.body ?? ""), input.params),
+        title,
+        body,
         url: row.url == null ? null : String(row.url),
         category: toCategory(row.category),
         trigger_type: input.trigger,
         dedupe_key: dedupeKey,
       });
+
+      // Push is the third channel, with the same text as the in-app item. Only
+      // a new row is pushed, so the dedupe key also keeps pushes from repeating.
+      // Not awaited: the user action that fired emit() shouldn't wait on Expo.
+      if (created > 0) {
+        void this.push.sendToWallet(wallet, {
+          title,
+          body,
+          data: { trigger: input.trigger },
+        });
+      }
     } catch (err) {
       this.logger.warn(
         `[notifications] emit failed for ${input.trigger}: ${(err as Error).message}`
       );
     }
+  }
+
+  /**
+   * Wallets that deposited into a vault, or into any vault when `vaultId` is
+   * omitted. Read from audit_logs, where a vault deposit records the vault
+   * contract id as pool_id. A wallet that later withdrew everything is still
+   * included.
+   */
+  async vaultDepositors(vaultId?: string): Promise<string[]> {
+    const wallets = new Set<string>();
+    for (let from = 0; ; from += DEPOSITORS_PAGE) {
+      let query = this.supabase.client
+        .from("audit_logs")
+        .select("wallet_address")
+        .eq("action_type", "vaults_deposit");
+      if (vaultId) query = query.eq("pool_id", vaultId);
+      const { data, error } = await query.range(
+        from,
+        from + DEPOSITORS_PAGE - 1
+      );
+      if (error) throw new Error(error.message);
+
+      const rows = (data ?? []) as { wallet_address?: unknown }[];
+      for (const row of rows) {
+        if (typeof row.wallet_address === "string" && row.wallet_address) {
+          wallets.add(row.wallet_address);
+        }
+      }
+      if (rows.length < DEPOSITORS_PAGE) break;
+    }
+    return [...wallets];
   }
 
   /**

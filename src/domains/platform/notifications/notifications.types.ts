@@ -79,6 +79,30 @@ export const NOTIFICATION_TRIGGERS = [
     inAppSupported: false,
     placeholders: ["balance", "threshold"],
   },
+  {
+    id: "tx_confirmed",
+    label: "Transaction confirmed",
+    description:
+      "In-app and push: fires when a transaction relayed through /v1/tx/submit succeeds. No email.",
+    inAppSupported: true,
+    placeholders: ["hash"],
+  },
+  {
+    id: "vault_run",
+    label: "Vault run",
+    description:
+      "In-app and push: fires for every depositor when the keeper invests or rebalances a vault, at most once per vault per day. No email.",
+    inAppSupported: true,
+    placeholders: ["vault"],
+  },
+  {
+    id: "portfolio_valuation",
+    label: "Portfolio valuation",
+    description:
+      "In-app and push: daily reminder to check the portfolio, for wallets with vault deposits. No email.",
+    inAppSupported: true,
+    placeholders: [] as string[],
+  },
 ] as const;
 
 /** Triggers that can carry an in-app message. */

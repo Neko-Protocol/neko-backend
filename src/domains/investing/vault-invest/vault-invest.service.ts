@@ -12,6 +12,7 @@ import {
   type VaultRebalanceConfig,
 } from "@neko-protocol/keeper";
 import { StellarRpcService } from "@core/stellar/stellar-rpc.service";
+import { NotificationsService } from "@domains/platform/notifications/notifications.service";
 import { collectFees } from "./keeper/fees";
 import {
   amountToHuman,
@@ -70,7 +71,8 @@ export class VaultInvestService {
 
   constructor(
     config: ConfigService,
-    private readonly stellar: StellarRpcService
+    private readonly stellar: StellarRpcService,
+    private readonly notifications: NotificationsService
   ) {
     this.secretKey =
       config.get<string>("VAULT_MANAGER_SECRET_KEY") || undefined;
@@ -91,6 +93,7 @@ export class VaultInvestService {
     }
     const configs = this.configuredBatchVaults();
     const vaults = await this.executeKeeper(configs, "batch", mode);
+    this.notifyVaultRuns(vaults);
     const success = vaults.every((v) => v.success);
     return { success, mode: "batch", vaults };
   }
@@ -115,6 +118,7 @@ export class VaultInvestService {
       : undefined;
     const configs = config ? [config] : [];
     const vaults = await this.executeKeeper(configs, "single", mode);
+    this.notifyVaultRuns(vaults);
     const success = vaults.every((v) => v.success);
     return {
       success,
@@ -154,6 +158,44 @@ export class VaultInvestService {
    * reserve its subentries lock up. Returns null when Horizon is unreachable so
    * a lookup failure never blocks a run on its own.
    */
+  /**
+   * In-app + push "vault run" for every depositor of each vault whose rebalance
+   * transaction landed. Deduped per vault per UTC day, so a vault that runs
+   * every 30 minutes notifies a depositor at most once a day. Not awaited: the
+   * keeper run shouldn't wait on notification delivery.
+   */
+  private notifyVaultRuns(vaults: VaultKeeperResult[]): void {
+    const day = new Date().toISOString().slice(0, 10);
+    for (const vault of vaults) {
+      if (!vault.rebalance.attempted || vault.rebalance.status !== "SUCCESS") {
+        continue;
+      }
+      void this.notifyDepositors(vault.vaultId, vault.label, day);
+    }
+  }
+
+  private async notifyDepositors(
+    vaultId: string,
+    label: string,
+    day: string
+  ): Promise<void> {
+    try {
+      const wallets = await this.notifications.vaultDepositors(vaultId);
+      for (const wallet of wallets) {
+        await this.notifications.emit({
+          trigger: "vault_run",
+          walletAddress: wallet,
+          dedupeKey: `vault_run:${vaultId}:${day}`,
+          params: { vault: label },
+        });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `vault ${label} (${vaultId}) run notification failed: ${(err as Error).message}`
+      );
+    }
+  }
+
   private async spendableStroops(publicKey: string): Promise<bigint | null> {
     try {
       const account = await this.stellar.horizon.loadAccount(publicKey);

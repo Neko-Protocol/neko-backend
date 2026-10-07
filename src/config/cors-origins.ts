@@ -9,9 +9,12 @@ export function parseCorsOrigins(raw: string | undefined | null): string[] {
   const value = (raw ?? "").trim();
   if (!value) return [];
 
-  const entries = value.startsWith("[")
-    ? parseJsonArray(value)
-    : value.split(",");
+  // An object is JSON too: parse it so it gets the "must be an array" error
+  // instead of a confusing "not a valid URL".
+  const entries =
+    value.startsWith("[") || value.startsWith("{")
+      ? parseJsonArray(value)
+      : value.split(",");
 
   const origins = entries
     .map((entry) => entry.trim())
