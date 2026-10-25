@@ -6,6 +6,7 @@ import type { PrivyService } from "@core/privy/privy.service";
 import { fundWithFriendbot } from "@shared/stellar/friendbot";
 import { AccountsService } from "./accounts.service";
 import { ApplicationsService } from "./applications.service";
+import type { AssistantService } from "./assistant/assistant.service";
 import type { CreateApplicationDto } from "./dto/create-application.dto";
 import {
   toApplicationView,
@@ -141,8 +142,18 @@ function setup(env: Record<string, string> = BASE_ENV) {
     verifications,
     config(env)
   );
-  const applications = new ApplicationsService(db.service, accounts);
-  return { db, didit, privy, verifications, accounts, applications };
+  const assistant = {
+    finishSession: jest
+      .fn()
+      .mockResolvedValue([
+        { role: "user", text: "Is a private offering right for me?" },
+      ]),
+    reviewSummary: jest
+      .fn()
+      .mockResolvedValue("Private raise for a coffee harvest."),
+  } as unknown as jest.Mocked<AssistantService>;
+  const applications = new ApplicationsService(db.service, accounts, assistant);
+  return { db, didit, privy, verifications, accounts, applications, assistant };
 }
 
 const SAMPLE_APPLICATION: CreateApplicationDto = {
@@ -374,6 +385,68 @@ describe("ApplicationsService", () => {
     expect(view.target_amount).toBe(250000);
     expect(db.tables.launchpad_applications).toHaveLength(1);
     expect(db.tables.launchpad_applications[0].status).toBe("submitted");
+  });
+
+  it("does not touch the assistant without a session id", async () => {
+    const { verifications, accounts, applications, assistant, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+
+    await applications.create("token", SAMPLE_APPLICATION);
+    expect(assistant.finishSession).not.toHaveBeenCalled();
+    expect(db.tables.launchpad_applications[0].ai_summary).toBeNull();
+  });
+
+  it("closes the assistant session and stores the reviewer summary", async () => {
+    const { verifications, accounts, applications, assistant, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    const created = await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+    const sessionId = randomUUID();
+
+    const view = await applications.create("token", {
+      ...SAMPLE_APPLICATION,
+      assistant_session_id: sessionId,
+    });
+    expect(assistant.finishSession).toHaveBeenCalledWith(
+      created.account.id,
+      sessionId
+    );
+    expect(view.ai_summary).toBeNull();
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(assistant.reviewSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ asset_name: SAMPLE_APPLICATION.asset_name }),
+      [{ role: "user", text: "Is a private offering right for me?" }]
+    );
+    expect(db.tables.launchpad_applications[0].ai_summary).toBe(
+      "Private raise for a coffee harvest."
+    );
+  });
+
+  it("still creates the application when closing the session fails", async () => {
+    const { verifications, accounts, applications, assistant, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+    assistant.finishSession.mockRejectedValueOnce(new Error("storage down"));
+
+    const view = await applications.create("token", {
+      ...SAMPLE_APPLICATION,
+      assistant_session_id: randomUUID(),
+    });
+    expect(view.status).toBe("submitted");
+    expect(db.tables.launchpad_applications).toHaveLength(1);
   });
 
   it("rejects adminDecide when the application is already final", async () => {

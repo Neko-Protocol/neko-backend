@@ -56,6 +56,8 @@ async function bootstrap() {
   });
   const logger = app.get(Logger);
   app.useLogger(logger);
+  // Assistant chat requests carry the conversation and form; the default is 100kb.
+  app.useBodyParser("json", { limit: "1mb" });
 
   // See TRUST_PROXY_HOPS in .env.example — setting higher than the real chain
   // lets clients spoof X-Forwarded-For.

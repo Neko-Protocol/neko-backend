@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -122,9 +123,11 @@ export class CreateApplicationDto {
   @Type(() => ApplicationDocumentDto)
   documents!: ApplicationDocumentDto[];
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description:
+      "Assistant session used while filling the form. It is closed on submit and its conversation feeds the reviewer summary.",
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(4000)
-  ai_summary?: string;
+  @IsUUID()
+  assistant_session_id?: string;
 }
