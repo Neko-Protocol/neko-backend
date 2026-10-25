@@ -5,6 +5,12 @@ import type { DiditService } from "@core/didit/didit.service";
 import type { PrivyService } from "@core/privy/privy.service";
 import { fundWithFriendbot } from "@shared/stellar/friendbot";
 import { AccountsService } from "./accounts.service";
+import { ApplicationsService } from "./applications.service";
+import type { CreateApplicationDto } from "./dto/create-application.dto";
+import {
+  toApplicationView,
+  type ApplicationRow,
+} from "./launchpad.types";
 import { VerificationsService } from "./verifications.service";
 
 jest.mock("@shared/stellar/friendbot", () => ({
@@ -21,14 +27,20 @@ function fakeSupabase() {
     const filters: Array<[string, unknown]> = [];
     let op: "select" | "insert" | "update" | "delete" = "select";
     let payload: Row = {};
+    let orderCol: string | null = null;
+    let orderAsc = true;
+    let limitN: number | null = null;
     const match = () =>
       rows(table).filter((r) => filters.every(([k, v]) => r[k] === v));
     const run = () => {
       if (op === "insert") {
+        const now = new Date().toISOString();
         const row = {
           id: randomUUID(),
           claimed_at: null,
           provider_session_id: null,
+          created_at: now,
+          updated_at: now,
           ...payload,
         };
         rows(table).push(row);
@@ -44,7 +56,17 @@ function fakeSupabase() {
         tables[table] = rows(table).filter((r) => !hit.includes(r));
         return hit;
       }
-      return match();
+      let out = match();
+      if (orderCol) {
+        const col = orderCol;
+        out = [...out].sort((a, b) => {
+          const av = String(a[col] ?? "");
+          const bv = String(b[col] ?? "");
+          return orderAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+      }
+      if (limitN != null) out = out.slice(0, limitN);
+      return out;
     };
     const builder = {
       select: () => builder,
@@ -52,6 +74,12 @@ function fakeSupabase() {
       update: (v: Row) => ((op = "update"), (payload = v), builder),
       delete: () => ((op = "delete"), builder),
       eq: (k: string, v: unknown) => (filters.push([k, v]), builder),
+      order: (col: string, opts?: { ascending?: boolean }) => (
+        (orderCol = col),
+        (orderAsc = opts?.ascending !== false),
+        builder
+      ),
+      limit: (n: number) => ((limitN = n), builder),
       single: async () => ({ data: run()[0] ?? null, error: null }),
       maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),
       then: (resolve: (v: unknown) => void) =>
@@ -113,8 +141,29 @@ function setup(env: Record<string, string> = BASE_ENV) {
     verifications,
     config(env)
   );
-  return { db, didit, privy, verifications, accounts };
+  const applications = new ApplicationsService(db.service, accounts);
+  return { db, didit, privy, verifications, accounts, applications };
 }
+
+const SAMPLE_APPLICATION: CreateApplicationDto = {
+  issuer_name: "Neko Coffee SA",
+  issuer_country: "CR",
+  asset_name: "Coffee Inventory Note",
+  asset_type: "agriculture",
+  description: "Tokenized harvest receivables.",
+  target_amount: 250000,
+  currency: "USD",
+  min_ticket: 1000,
+  expected_yield_pct: 8.5,
+  term_months: 12,
+  max_investors: 50,
+  offering_type: "private",
+  investor_countries: ["CR", "PA"],
+  accepts_us_investors: false,
+  uses_mass_marketing: false,
+  milestones: [{ title: "Close", amount_pct: 100 }],
+  documents: [{ name: "Deck", url: "https://example.com/deck.pdf" }],
+};
 
 beforeEach(() => {
   (fundWithFriendbot as jest.Mock).mockResolvedValue({
@@ -291,3 +340,115 @@ describe("AccountsService", () => {
     });
   });
 });
+
+describe("ApplicationsService", () => {
+  it("rejects create when the issuer verification is not approved", async () => {
+    const { verifications, accounts, applications, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+    db.tables.launchpad_verifications[0].status = "in_review";
+
+    await expect(
+      applications.create("token", SAMPLE_APPLICATION)
+    ).rejects.toMatchObject({
+      response: { code: "ISSUER_NOT_VERIFIED" },
+    });
+  });
+
+  it("inserts a new application with status submitted", async () => {
+    const { verifications, accounts, applications, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    const created = await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+
+    const view = await applications.create("token", SAMPLE_APPLICATION);
+    expect(view.status).toBe("submitted");
+    expect(view.account_id).toBe(created.account.id);
+    expect(view.target_amount).toBe(250000);
+    expect(db.tables.launchpad_applications).toHaveLength(1);
+    expect(db.tables.launchpad_applications[0].status).toBe("submitted");
+  });
+
+  it("rejects adminDecide when the application is already final", async () => {
+    const { verifications, accounts, applications, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+    const app = await applications.create("token", SAMPLE_APPLICATION);
+    db.tables.launchpad_applications[0].status = "approved";
+
+    await expect(
+      applications.adminDecide(
+        app.id,
+        { decision: "rejected", note: "too late" },
+        null
+      )
+    ).rejects.toMatchObject({
+      response: { code: "APPLICATION_NOT_REVIEWABLE" },
+    });
+  });
+
+  it("requires a note when adminDecide rejects", async () => {
+    const { verifications, accounts, applications } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+    const app = await applications.create("token", SAMPLE_APPLICATION);
+
+    await expect(
+      applications.adminDecide(app.id, { decision: "rejected" }, null)
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("toApplicationView", () => {
+  it("converts numeric strings from Postgres to numbers", () => {
+    const row = {
+      id: "a1",
+      account_id: "acc1",
+      status: "submitted",
+      issuer_name: "Issuer",
+      issuer_country: "CR",
+      asset_name: "Asset",
+      asset_type: "other",
+      description: "Desc",
+      target_amount: "1000.50",
+      currency: "USD",
+      min_ticket: "100.00",
+      expected_yield_pct: "7.250",
+      term_months: 6,
+      max_investors: 10,
+      offering_type: "private",
+      investor_countries: ["CR"],
+      accepts_us_investors: false,
+      uses_mass_marketing: false,
+      milestones: [],
+      documents: [],
+      ai_summary: null,
+      review_note: null,
+      reviewed_by: null,
+      reviewed_at: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as ApplicationRow;
+
+    const view = toApplicationView(row);
+    expect(view.target_amount).toBe(1000.5);
+    expect(view.min_ticket).toBe(100);
+    expect(view.expected_yield_pct).toBe(7.25);
+  });
+});
+

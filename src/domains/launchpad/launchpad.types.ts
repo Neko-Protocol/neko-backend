@@ -18,7 +18,106 @@ export const LaunchpadErrorCode = {
   EMAIL_IN_USE: "EMAIL_IN_USE",
   WORKFLOW_NOT_CONFIGURED: "WORKFLOW_NOT_CONFIGURED",
   WEBHOOK_SIGNATURE_INVALID: "WEBHOOK_SIGNATURE_INVALID",
+  APPLICATION_NOT_FOUND: "APPLICATION_NOT_FOUND",
+  APPLICATION_NOT_REVIEWABLE: "APPLICATION_NOT_REVIEWABLE",
+  ISSUER_NOT_VERIFIED: "ISSUER_NOT_VERIFIED",
 } as const;
+
+export type ApplicationStatus =
+  | "submitted"
+  | "in_review"
+  | "changes_requested"
+  | "approved"
+  | "rejected";
+
+export type AssetType =
+  | "real_estate"
+  | "private_credit"
+  | "invoices"
+  | "agriculture"
+  | "energy"
+  | "other";
+
+export type OfferingType = "private" | "public";
+
+export interface ApplicationMilestone {
+  title: string;
+  amount_pct: number;
+  due?: string;
+}
+
+export interface ApplicationDocument {
+  name: string;
+  url: string;
+}
+
+export interface ApplicationRow {
+  id: string;
+  account_id: string;
+  status: ApplicationStatus;
+  issuer_name: string;
+  issuer_country: string;
+  asset_name: string;
+  asset_type: AssetType;
+  description: string;
+  target_amount: number | string;
+  currency: string;
+  min_ticket: number | string;
+  expected_yield_pct: number | string | null;
+  term_months: number | null;
+  max_investors: number | null;
+  offering_type: OfferingType;
+  investor_countries: string[];
+  accepts_us_investors: boolean;
+  uses_mass_marketing: boolean;
+  milestones: ApplicationMilestone[];
+  documents: ApplicationDocument[];
+  ai_summary: string | null;
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApplicationView {
+  id: string;
+  account_id: string;
+  status: ApplicationStatus;
+  issuer_name: string;
+  issuer_country: string;
+  asset_name: string;
+  asset_type: AssetType;
+  description: string;
+  target_amount: number;
+  currency: string;
+  min_ticket: number;
+  expected_yield_pct: number | null;
+  term_months: number | null;
+  max_investors: number | null;
+  offering_type: OfferingType;
+  investor_countries: string[];
+  accepts_us_investors: boolean;
+  uses_mass_marketing: boolean;
+  milestones: ApplicationMilestone[];
+  documents: ApplicationDocument[];
+  ai_summary: string | null;
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminApplicationView extends ApplicationView {
+  issuer: {
+    account_id: string;
+    email: string;
+    display_name: string | null;
+    verification: VerificationView;
+    wallet_address: string | null;
+  };
+}
 
 export interface VerificationRow {
   id: string;
@@ -104,5 +203,47 @@ export function toVerificationView(row: VerificationRow): VerificationView {
     business_name: row.business_name,
     country: row.country,
     claimed: Boolean(row.claimed_at),
+  };
+}
+
+function toNumber(value: number | string): number {
+  return typeof value === "number" ? value : Number(value);
+}
+
+function toNullableNumber(
+  value: number | string | null | undefined
+): number | null {
+  if (value == null) return null;
+  return toNumber(value);
+}
+
+export function toApplicationView(row: ApplicationRow): ApplicationView {
+  return {
+    id: row.id,
+    account_id: row.account_id,
+    status: row.status,
+    issuer_name: row.issuer_name,
+    issuer_country: row.issuer_country,
+    asset_name: row.asset_name,
+    asset_type: row.asset_type,
+    description: row.description,
+    target_amount: toNumber(row.target_amount),
+    currency: row.currency,
+    min_ticket: toNumber(row.min_ticket),
+    expected_yield_pct: toNullableNumber(row.expected_yield_pct),
+    term_months: row.term_months == null ? null : Number(row.term_months),
+    max_investors: row.max_investors == null ? null : Number(row.max_investors),
+    offering_type: row.offering_type,
+    investor_countries: row.investor_countries ?? [],
+    accepts_us_investors: Boolean(row.accepts_us_investors),
+    uses_mass_marketing: Boolean(row.uses_mass_marketing),
+    milestones: Array.isArray(row.milestones) ? row.milestones : [],
+    documents: Array.isArray(row.documents) ? row.documents : [],
+    ai_summary: row.ai_summary,
+    review_note: row.review_note,
+    reviewed_by: row.reviewed_by,
+    reviewed_at: row.reviewed_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
