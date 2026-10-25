@@ -100,4 +100,15 @@ export const envValidationSchema = Joi.object({
     .optional()
     .allow(""),
   KYC_MOCK_ENABLED: Joi.string().valid("true", "false", "").optional(),
+
+  ANTHROPIC_API_KEY: Joi.string().optional().allow(""),
+  ANTHROPIC_MODEL: Joi.string().optional().allow(""),
+  LAUNCHPAD_RAG_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_ASSISTANT_BUCKET: Joi.string().default("launchpad-assistant-docs"),
+  LAUNCHPAD_APPLICATION_BUCKET: Joi.string().default(
+    "launchpad-application-docs"
+  ),
 });
