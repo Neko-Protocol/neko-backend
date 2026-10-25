@@ -84,6 +84,9 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(@neko-protocol|jose)/)"
+    ],
     "moduleNameMapper": {
       "^@core/(.*)$": "<rootDir>/core/$1",
       "^@domains/(.*)$": "<rootDir>/domains/$1",
