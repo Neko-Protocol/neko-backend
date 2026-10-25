@@ -12,6 +12,7 @@ import { CoreModule } from "./core/core.module";
 import { ChainModule } from "./domains/chain/chain.module";
 import { MarketDataModule } from "./domains/market-data/market-data.module";
 import { InvestingModule } from "./domains/investing/investing.module";
+import { LaunchpadModule } from "./domains/launchpad/launchpad.module";
 import { PlatformModule } from "./domains/platform/platform.module";
 
 @Module({
@@ -57,6 +58,7 @@ import { PlatformModule } from "./domains/platform/platform.module";
     MarketDataModule,
     InvestingModule,
     PlatformModule,
+    LaunchpadModule,
   ],
   providers: [
     {
