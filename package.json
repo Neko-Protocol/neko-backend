@@ -30,6 +30,7 @@
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.4.0",
+    "@privy-io/node": "0.35.0",
     "@stellar/stellar-sdk": "^14.5.0",
     "@supabase/supabase-js": "^2.106.0",
     "bcryptjs": "^2.4.3",
@@ -83,6 +84,9 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(@neko-protocol|jose)/)"
+    ],
     "moduleNameMapper": {
       "^@core/(.*)$": "<rootDir>/core/$1",
       "^@domains/(.*)$": "<rootDir>/domains/$1",

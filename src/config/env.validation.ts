@@ -78,4 +78,26 @@ export const envValidationSchema = Joi.object({
   ADMIN_WALLET_ADDRESS: Joi.string().optional().allow(""),
   RESEND_API_KEY: Joi.string().optional().allow(""),
   RESEND_FROM_EMAIL: Joi.string().default("noreply@nekoprotocol.xyz"),
+
+  PRIVY_APP_ID: Joi.string().optional().allow(""),
+  PRIVY_APP_SECRET: Joi.string().optional().allow(""),
+  PRIVY_VERIFICATION_KEY: Joi.string().optional().allow(""),
+
+  DIDIT_API_KEY: Joi.string().optional().allow(""),
+  DIDIT_WEBHOOK_SECRET: Joi.string().optional().allow(""),
+  DIDIT_KYC_WORKFLOW_ID: Joi.string().uuid().optional().allow(""),
+  DIDIT_KYB_WORKFLOW_ID: Joi.string().uuid().optional().allow(""),
+  DIDIT_BASE_URL: Joi.string()
+    .uri({ scheme: ["https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_APP_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_FRIENDBOT_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  KYC_MOCK_ENABLED: Joi.string().valid("true", "false", "").optional(),
 });

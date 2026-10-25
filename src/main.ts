@@ -51,6 +51,8 @@ process.on("uncaughtException", (err) => {
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
+    // Raw bytes are needed to verify Didit webhook signatures.
+    rawBody: true,
   });
   const logger = app.get(Logger);
   app.useLogger(logger);
