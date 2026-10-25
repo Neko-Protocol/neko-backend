@@ -5,15 +5,22 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  BadRequestException,
   Param,
   ParseUUIDPipe,
+  PayloadTooLargeException,
   Post,
   Query,
   UnauthorizedException,
+  UnsupportedMediaTypeException,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiTags,
   ApiTooManyRequestsResponse,
@@ -22,6 +29,12 @@ import {
 import { Throttle } from "@nestjs/throttler";
 import { AdminAuthGuard } from "../platform/admin-auth/admin-auth.guard";
 import { ApplicationsService } from "./applications.service";
+import {
+  AssistantStorageService,
+  MAX_APPLICATION_FILE_BYTES,
+  applicationMediaType,
+} from "./assistant/assistant-storage.service";
+import { AssistantService } from "./assistant/assistant.service";
 import { CreateApplicationDto } from "./dto/create-application.dto";
 import { DecideApplicationDto } from "./dto/decide-application.dto";
 import { ListApplicationsQueryDto } from "./dto/list-applications-query.dto";
@@ -35,7 +48,11 @@ import {
 @ApiTooManyRequestsResponse({ description: "Rate-limited." })
 @Controller("launchpad/applications")
 export class ApplicationsController {
-  constructor(private readonly applications: ApplicationsService) {}
+  constructor(
+    private readonly applications: ApplicationsService,
+    private readonly assistant: AssistantService,
+    private readonly storage: AssistantStorageService
+  ) {}
 
   private bearerToken(authorization?: string): string {
     const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -57,6 +74,49 @@ export class ApplicationsController {
     @Headers("authorization") authorization?: string
   ): Promise<ApplicationView> {
     return this.applications.create(this.bearerToken(authorization), dto);
+  }
+
+  @Post("documents")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: "Upload a document to attach to an application (issuer).",
+  })
+  @ApiBearerAuth()
+  @ApiConsumes("multipart/form-data")
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: MAX_APPLICATION_FILE_BYTES },
+    })
+  )
+  async uploadDocument(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Headers("authorization") authorization?: string
+  ): Promise<{ document: { name: string; url: string } }> {
+    const account = await this.assistant.verifiedAccount(
+      this.bearerToken(authorization)
+    );
+    if (!file) throw new BadRequestException({ code: "FILE_REQUIRED" });
+    if (file.size > MAX_APPLICATION_FILE_BYTES) {
+      throw new PayloadTooLargeException({
+        code: "FILE_TOO_LARGE",
+        message: "Files can be up to 20 MB.",
+      });
+    }
+    const mediaType = applicationMediaType(file.originalname);
+    if (!mediaType) {
+      throw new UnsupportedMediaTypeException({
+        code: "UNSUPPORTED_TYPE",
+        message: "Use PDF, Word, Excel, CSV, TXT or an image.",
+      });
+    }
+    return {
+      document: await this.storage.uploadApplicationDocument(
+        account.account.id,
+        file,
+        mediaType
+      ),
+    };
   }
 
   @Get("mine")
