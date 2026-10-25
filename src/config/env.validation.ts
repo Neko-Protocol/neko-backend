@@ -95,6 +95,10 @@ export const envValidationSchema = Joi.object({
     .uri({ scheme: ["http", "https"] })
     .optional()
     .allow(""),
+  PRO_APP_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
   LAUNCHPAD_FRIENDBOT_URL: Joi.string()
     .uri({ scheme: ["http", "https"] })
     .optional()

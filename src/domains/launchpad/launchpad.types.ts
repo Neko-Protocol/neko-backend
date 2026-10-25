@@ -7,6 +7,8 @@ export const CLAIM_TOKEN_HEADER = "x-claim-token";
 
 export type VerificationKind = "kyc" | "kyb";
 export type VerificationProvider = "didit" | "mock";
+/** Which frontend started the verification; picks Didit's callback origin. */
+export type VerificationApp = "launchpad" | "pro";
 
 export const LaunchpadErrorCode = {
   VERIFICATION_NOT_FOUND: "VERIFICATION_NOT_FOUND",
