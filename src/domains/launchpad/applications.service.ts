@@ -9,6 +9,7 @@ import {
 import { ErrorCode } from "@neko-protocol/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { AccountsService } from "./accounts.service";
+import { AssistantService } from "./assistant/assistant.service";
 import type { CreateApplicationDto } from "./dto/create-application.dto";
 import type { DecideApplicationDto } from "./dto/decide-application.dto";
 import {
@@ -36,7 +37,8 @@ export class ApplicationsService {
 
   constructor(
     private readonly supabase: SupabaseService,
-    private readonly accounts: AccountsService
+    private readonly accounts: AccountsService,
+    private readonly assistant: AssistantService
   ) {}
 
   async create(
@@ -72,12 +74,62 @@ export class ApplicationsService {
         uses_mass_marketing: dto.uses_mass_marketing,
         milestones: dto.milestones,
         documents: dto.documents,
-        ai_summary: dto.ai_summary ?? null,
+        ai_summary: null,
       })
       .select("*")
       .single();
     if (error || !data) throw this.dbError("application_insert", error);
-    return toApplicationView(data as ApplicationRow);
+    const view = toApplicationView(data as ApplicationRow);
+    if (dto.assistant_session_id) {
+      await this.finishAssistant(
+        account.account.id,
+        dto.assistant_session_id,
+        view
+      );
+    }
+    return view;
+  }
+
+  /**
+   * Closes the assistant session (its files are deleted) and writes the reviewer
+   * summary in the background, so submitting doesn't wait on the model.
+   */
+  private async finishAssistant(
+    accountId: string,
+    sessionId: string,
+    view: ApplicationView
+  ): Promise<void> {
+    let transcript: Awaited<ReturnType<AssistantService["finishSession"]>> = [];
+    try {
+      transcript = await this.assistant.finishSession(accountId, sessionId);
+    } catch (err) {
+      this.logger.warn({
+        event: "launchpad_assistant_close_failed",
+        applicationId: view.id,
+        error: String(err),
+      });
+    }
+    void (async () => {
+      try {
+        const { id, account_id: _account, ...application } = view;
+        const summary = await this.assistant.reviewSummary(
+          application,
+          transcript
+        );
+        if (!summary) return;
+        const { error } = await this.supabase.client
+          .from("launchpad_applications")
+          .update({ ai_summary: summary })
+          .eq("id", id);
+        if (error) throw error;
+      } catch (err) {
+        this.logger.warn({
+          event: "launchpad_ai_summary_failed",
+          applicationId: view.id,
+          error: String(err),
+        });
+      }
+    })();
   }
 
   async listMine(accessToken: string): Promise<ApplicationView[]> {
