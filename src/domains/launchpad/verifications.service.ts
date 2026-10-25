@@ -206,7 +206,7 @@ export class VerificationsService {
     return base ? `${base.replace(/\/+$/, "")}/didit-callback` : undefined;
   }
 
-  private async find(id: string): Promise<VerificationRow | null> {
+  async find(id: string): Promise<VerificationRow | null> {
     const { data, error } = await this.supabase.client
       .from(TABLE)
       .select("*")
