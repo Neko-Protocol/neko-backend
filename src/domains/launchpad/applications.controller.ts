@@ -38,10 +38,12 @@ import { AssistantService } from "./assistant/assistant.service";
 import { CreateApplicationDto } from "./dto/create-application.dto";
 import { DecideApplicationDto } from "./dto/decide-application.dto";
 import { ListApplicationsQueryDto } from "./dto/list-applications-query.dto";
+import { SimilarApplicationsQueryDto } from "./dto/similar-applications-query.dto";
 import {
   LaunchpadErrorCode,
   type AdminApplicationView,
   type ApplicationView,
+  type SimilarApplicationsResponse,
 } from "./launchpad.types";
 
 @ApiTags("launchpad")
@@ -142,19 +144,25 @@ export class AdminApplicationsController {
   @Get()
   @ApiOperation({ summary: "List tokenization applications (admin)." })
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  list(
-    @Query() query: ListApplicationsQueryDto
-  ): Promise<ApplicationView[]> {
+  list(@Query() query: ListApplicationsQueryDto): Promise<ApplicationView[]> {
     return this.applications.adminList(query.status);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get a tokenization application (admin)." })
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  get(
-    @Param("id", ParseUUIDPipe) id: string
-  ): Promise<AdminApplicationView> {
+  get(@Param("id", ParseUUIDPipe) id: string): Promise<AdminApplicationView> {
     return this.applications.adminGet(id);
+  }
+
+  @Get(":id/similar")
+  @ApiOperation({ summary: "Find similar decided applications (admin)." })
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  similar(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query() query: SimilarApplicationsQueryDto
+  ): Promise<SimilarApplicationsResponse> {
+    return this.applications.adminSimilar(id, query.limit);
   }
 
   @Post(":id/decision")

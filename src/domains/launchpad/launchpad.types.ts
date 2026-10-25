@@ -24,11 +24,7 @@ export const LaunchpadErrorCode = {
 } as const;
 
 export type ApplicationStatus =
-  | "submitted"
-  | "in_review"
-  | "changes_requested"
-  | "approved"
-  | "rejected";
+  "submitted" | "in_review" | "changes_requested" | "approved" | "rejected";
 
 export type AssetType =
   | "real_estate"
@@ -117,6 +113,33 @@ export interface AdminApplicationView extends ApplicationView {
     verification: VerificationView;
     wallet_address: string | null;
   };
+}
+
+export type DecidedApplicationStatus = Extract<
+  ApplicationStatus,
+  "approved" | "rejected" | "changes_requested"
+>;
+
+export interface SimilarApplicationCase extends Pick<
+  ApplicationView,
+  | "id"
+  | "asset_name"
+  | "asset_type"
+  | "issuer_country"
+  | "offering_type"
+  | "target_amount"
+  | "currency"
+  | "review_note"
+  | "reviewed_at"
+> {
+  status: DecidedApplicationStatus;
+  score: number;
+  matched: string[];
+}
+
+export interface SimilarApplicationsResponse {
+  summary: Record<DecidedApplicationStatus, number>;
+  cases: SimilarApplicationCase[];
 }
 
 export interface VerificationRow {
