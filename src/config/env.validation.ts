@@ -111,6 +111,56 @@ export const envValidationSchema = Joi.object({
     .uri({ scheme: ["http", "https"] })
     .optional()
     .allow(""),
+  // Launchpad contracts on testnet. Only keys and roots: every other address
+  // is read off the ledger at startup. Kept apart from the mainnet STELLAR_*.
+  LAUNCHPAD_RPC_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_HORIZON_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_NETWORK_PASSPHRASE: Joi.string().optional().allow(""),
+  LAUNCHPAD_PUBLIC_API_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  NEKO_MANAGER_SECRET: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_ADMIN_SECRET: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_USDC_ISSUER_SECRET: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_CLAIM_SIGNING_KEY: Joi.string()
+    .pattern(/^[0-9a-fA-F]{64}$/)
+    .optional()
+    .allow(""),
+  NEKO_USDC_ASSET: Joi.string()
+    .pattern(/^[A-Za-z0-9]{1,12}:G[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_FACTORY_ID: Joi.string()
+    .pattern(/^C[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_MILESTONE_TRACKER_ID: Joi.string()
+    .pattern(/^C[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_IDENTITY_WASM_HASH: Joi.string()
+    .pattern(/^[0-9a-fA-F]{64}$/)
+    .optional()
+    .allow(""),
+  NEKO_EXIT_FEE_BPS: Joi.number().integer().min(0).max(10_000).optional(),
+  NEKO_MAX_EXIT_FEE_BPS: Joi.number().integer().min(0).max(10_000).optional(),
+
   LAUNCHPAD_ASSISTANT_BUCKET: Joi.string().default("launchpad-assistant-docs"),
   LAUNCHPAD_APPLICATION_BUCKET: Joi.string().default(
     "launchpad-application-docs"
