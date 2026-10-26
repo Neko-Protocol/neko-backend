@@ -10,7 +10,9 @@ import {
   ParseUUIDPipe,
   PayloadTooLargeException,
   Post,
+  ParseIntPipe,
   Query,
+  Req,
   UnauthorizedException,
   UnsupportedMediaTypeException,
   UploadedFile,
@@ -27,7 +29,10 @@ import {
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
-import { AdminAuthGuard } from "../platform/admin-auth/admin-auth.guard";
+import {
+  AdminAuthGuard,
+  type AdminRequest,
+} from "../platform/admin-auth/admin-auth.guard";
 import { ApplicationsService } from "./applications.service";
 import {
   AssistantStorageService,
@@ -35,9 +40,16 @@ import {
   applicationMediaType,
 } from "./assistant/assistant-storage.service";
 import { AssistantService } from "./assistant/assistant.service";
+import { LaunchService } from "./chain/launch.service";
+import {
+  VaultOpsService,
+  type ChainActionResult,
+} from "./chain/vault-ops.service";
 import { CreateApplicationDto } from "./dto/create-application.dto";
 import { DecideApplicationDto } from "./dto/decide-application.dto";
+import { LaunchApplicationDto } from "./dto/launch-application.dto";
 import { ListApplicationsQueryDto } from "./dto/list-applications-query.dto";
+import { ReviewMilestoneDto } from "./dto/review-milestone.dto";
 import { SimilarApplicationsQueryDto } from "./dto/similar-applications-query.dto";
 import {
   LaunchpadErrorCode,
@@ -53,7 +65,8 @@ export class ApplicationsController {
   constructor(
     private readonly applications: ApplicationsService,
     private readonly assistant: AssistantService,
-    private readonly storage: AssistantStorageService
+    private readonly storage: AssistantStorageService,
+    private readonly launches: LaunchService
   ) {}
 
   private bearerToken(authorization?: string): string {
@@ -121,6 +134,22 @@ export class ApplicationsController {
     };
   }
 
+  @Post(":id/launch")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Deploy an approved application's token, compliance and vault (issuer). Resumes a failed launch.",
+  })
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  launch(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: LaunchApplicationDto,
+    @Headers("authorization") authorization?: string
+  ): Promise<ApplicationView> {
+    return this.launches.launch(this.bearerToken(authorization), id, dto);
+  }
+
   @Get("mine")
   @ApiOperation({ summary: "List applications for the logged-in issuer." })
   @ApiBearerAuth()
@@ -139,7 +168,10 @@ export class ApplicationsController {
 @UseGuards(AdminAuthGuard)
 @Controller("launchpad/admin/applications")
 export class AdminApplicationsController {
-  constructor(private readonly applications: ApplicationsService) {}
+  constructor(
+    private readonly applications: ApplicationsService,
+    private readonly vaults: VaultOpsService
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "List tokenization applications (admin)." })
@@ -171,9 +203,39 @@ export class AdminApplicationsController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   decide(
     @Param("id", ParseUUIDPipe) id: string,
-    @Body() dto: DecideApplicationDto
+    @Body() dto: DecideApplicationDto,
+    @Req() req: AdminRequest
   ): Promise<AdminApplicationView> {
-    // AdminAuthGuard does not attach the admin email to the request.
-    return this.applications.adminDecide(id, dto, null);
+    return this.applications.adminDecide(id, dto, req.adminEmail ?? null);
+  }
+
+  @Post(":id/vault/close-funding")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Close the vault's funding round (admin)." })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  closeFunding(
+    @Param("id", ParseUUIDPipe) id: string
+  ): Promise<ChainActionResult> {
+    return this.vaults.closeFunding(id);
+  }
+
+  @Post(":id/vault/release")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Release the raise to the issuer (admin)." })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  release(@Param("id", ParseUUIDPipe) id: string): Promise<ChainActionResult> {
+    return this.vaults.release(id);
+  }
+
+  @Post(":id/vault/milestones/:index/review")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Approve or reject milestone evidence (admin)." })
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  reviewMilestone(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Param("index", ParseIntPipe) index: number,
+    @Body() dto: ReviewMilestoneDto
+  ): Promise<ChainActionResult> {
+    return this.vaults.reviewMilestone(id, index, dto.approved, dto.note);
   }
 }

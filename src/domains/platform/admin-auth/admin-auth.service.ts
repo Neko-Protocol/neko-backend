@@ -40,12 +40,13 @@ export class AdminAuthService {
   /**
    * Verifies a Supabase access token belongs to a signed-in, currently
    * active admin. Used by AdminAuthGuard to protect admin-only routes.
+   * Returns the admin's email, or null.
    */
-  async verifyAdminToken(accessToken: string): Promise<boolean> {
-    if (!this.authClient) return false;
+  async verifyAdminToken(accessToken: string): Promise<string | null> {
+    if (!this.authClient) return null;
 
     const { data, error } = await this.authClient.auth.getUser(accessToken);
-    if (error || !data?.user?.email) return false;
+    if (error || !data?.user?.email) return null;
 
     const email = data.user.email.trim().toLowerCase();
     const { data: allowed } = await this.supabase.client
@@ -55,7 +56,7 @@ export class AdminAuthService {
       .eq("is_active", true)
       .maybeSingle();
 
-    return Boolean(allowed);
+    return allowed ? email : null;
   }
 
   private hashCode(code: string): string {

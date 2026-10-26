@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -73,6 +74,14 @@ export class CreateApplicationDto {
   @Min(0.01)
   min_ticket!: number;
 
+  @ApiProperty({
+    description:
+      "Least the raise needs to go ahead; at least min_ticket and at most target_amount.",
+  })
+  @IsNumber()
+  @Min(0.01)
+  min_target!: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
@@ -91,7 +100,7 @@ export class CreateApplicationDto {
   @Min(1)
   max_investors?: number;
 
-  @ApiProperty({ enum: OFFERING_TYPES, default: "private" })
+  @ApiProperty({ enum: OFFERING_TYPES, default: "public" })
   @IsIn(OFFERING_TYPES)
   offering_type!: OfferingType;
 
@@ -111,6 +120,7 @@ export class CreateApplicationDto {
 
   @ApiProperty({ type: [ApplicationMilestoneDto] })
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(12)
   @ValidateNested({ each: true })
   @Type(() => ApplicationMilestoneDto)

@@ -1,3 +1,4 @@
+import { BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "crypto";
 import { StrKey } from "@stellar/stellar-sdk";
@@ -9,6 +10,7 @@ import { AccountsService } from "./accounts.service";
 import { ApplicationsService } from "./applications.service";
 import { InvestorsService } from "./investors.service";
 import type { AssistantService } from "./assistant/assistant.service";
+import type { OnchainIdentityService } from "./chain/onchain-identity.service";
 import type { CreateApplicationDto } from "./dto/create-application.dto";
 import {
   toApplicationView,
@@ -155,7 +157,14 @@ function setup(env: Record<string, string> = BASE_ENV) {
       .mockResolvedValue("Private raise for a coffee harvest."),
   } as unknown as jest.Mocked<AssistantService>;
   const applications = new ApplicationsService(db.service, accounts, assistant);
-  const investors = new InvestorsService(db.service, verifications);
+  const onchainIdentity = {
+    register: jest.fn().mockResolvedValue("CIDENTITY"),
+  } as unknown as jest.Mocked<OnchainIdentityService>;
+  const investors = new InvestorsService(
+    db.service,
+    verifications,
+    onchainIdentity
+  );
   return {
     db,
     didit,
@@ -165,6 +174,7 @@ function setup(env: Record<string, string> = BASE_ENV) {
     applications,
     assistant,
     investors,
+    onchainIdentity,
   };
 }
 
@@ -177,14 +187,15 @@ const SAMPLE_APPLICATION: CreateApplicationDto = {
   target_amount: 250000,
   currency: "USD",
   min_ticket: 1000,
+  min_target: 125000,
   expected_yield_pct: 8.5,
   term_months: 12,
   max_investors: 50,
-  offering_type: "private",
+  offering_type: "public",
   investor_countries: ["CR", "PA"],
   accepts_us_investors: false,
   uses_mass_marketing: false,
-  milestones: [{ title: "Close", amount_pct: 100 }],
+  milestones: [{ title: "Close", amount_pct: 100, due: "2099-01-01" }],
   documents: [{ name: "Deck", url: "https://example.com/deck.pdf" }],
 };
 
@@ -277,7 +288,9 @@ describe("VerificationsService callback", () => {
 
 describe("InvestorsService", () => {
   it("whitelists the wallet and claims the verification", async () => {
-    const { verifications, investors, db } = setup();
+    const { verifications, investors, onchainIdentity, db } = setup();
+    // Hold the background on-chain registration so the first view is off-chain.
+    onchainIdentity.register.mockReturnValue(new Promise(() => undefined));
     const started = await verifications.startMock("kyb", "Neko Coffee");
 
     const view = await investors.create(
@@ -298,7 +311,8 @@ describe("InvestorsService", () => {
   });
 
   it("is idempotent for the same verification and wallet", async () => {
-    const { verifications, investors, db } = setup();
+    const { verifications, investors, onchainIdentity, db } = setup();
+    onchainIdentity.register.mockReturnValue(new Promise(() => undefined));
     const started = await verifications.startMock("kyc", "Demo Judge");
     const first = await investors.create(
       started.verification.id,
@@ -312,6 +326,62 @@ describe("InvestorsService", () => {
     );
     expect(second).toEqual(first);
     expect(db.tables.launchpad_investors).toHaveLength(1);
+  });
+
+  it("registers a new investor on-chain once, after responding", async () => {
+    const { verifications, investors, onchainIdentity } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    const view = await investors.create(
+      started.verification.id,
+      started.claim_token,
+      WALLET_A
+    );
+    expect(view.onchain).toBe(false);
+
+    await new Promise((r) => setImmediate(r));
+    const after = await investors.registerOnchain(WALLET_A);
+    expect(after).toMatchObject({ onchain: true, identity_contract: "CIDENTITY" });
+    expect(onchainIdentity.register).toHaveBeenCalledTimes(1);
+    expect(onchainIdentity.register).toHaveBeenCalledWith(WALLET_A, undefined, null);
+  });
+
+  it("surfaces an on-chain failure so Neko Pro can retry", async () => {
+    const { verifications, investors, onchainIdentity } = setup();
+    onchainIdentity.register.mockRejectedValue(new Error("rpc down"));
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await investors.create(started.verification.id, started.claim_token, WALLET_A);
+
+    await expect(investors.registerOnchain(WALLET_A)).rejects.toMatchObject({
+      response: { code: "CHAIN_CALL_FAILED" },
+    });
+    onchainIdentity.register.mockResolvedValue("CIDENTITY");
+    await expect(investors.registerOnchain(WALLET_A)).resolves.toMatchObject({
+      onchain: true,
+    });
+  });
+
+  it("registers a Launchpad account's wallet on-chain without an investor row", async () => {
+    const { verifications, accounts, investors, onchainIdentity, privy } =
+      setup();
+    privy.ensureUserWithStellarWallet.mockResolvedValueOnce({
+      userId: "did:privy:1",
+      email: "ana@x.com",
+      stellarWallets: [],
+      wallet: { address: WALLET_B, walletId: "w-1" },
+    } as never);
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+
+    await expect(investors.registerOnchain(WALLET_A)).rejects.toMatchObject({
+      response: { code: "INVESTOR_NOT_FOUND" },
+    });
+    const view = await investors.registerOnchain(WALLET_B);
+    expect(view).toMatchObject({ onchain: true, identity_contract: "CIDENTITY" });
+    expect(onchainIdentity.register).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a verification bound to another wallet", async () => {
@@ -542,6 +612,41 @@ describe("ApplicationsService", () => {
     expect(db.tables.launchpad_applications[0].status).toBe("submitted");
   });
 
+  it.each([
+    ["min_target below min_ticket", { min_target: 500 }],
+    ["min_target above target_amount", { min_target: 300000 }],
+    [
+      "milestones not adding up to 100",
+      { milestones: [{ title: "Close", amount_pct: 90, due: "2099-01-01" }] },
+    ],
+    [
+      "milestone dates out of order",
+      {
+        milestones: [
+          { title: "A", amount_pct: 50, due: "2099-02-01" },
+          { title: "B", amount_pct: 50, due: "2099-01-01" },
+        ],
+      },
+    ],
+    [
+      "a first milestone already due",
+      { milestones: [{ title: "Close", amount_pct: 100, due: "2020-01-01" }] },
+    ],
+  ])("rejects create with %s", async (_, override) => {
+    const { verifications, accounts, applications, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+
+    await expect(
+      applications.create("token", { ...SAMPLE_APPLICATION, ...override })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.tables.launchpad_applications ?? []).toHaveLength(0);
+  });
+
   it("does not touch the assistant without a session id", async () => {
     const { verifications, accounts, applications, assistant, db } = setup();
     const started = await verifications.startMock("kyc", "Demo Judge");
@@ -656,10 +761,11 @@ describe("toApplicationView", () => {
       target_amount: "1000.50",
       currency: "USD",
       min_ticket: "100.00",
+      min_target: null,
       expected_yield_pct: "7.250",
       term_months: 6,
       max_investors: 10,
-      offering_type: "private",
+      offering_type: "public",
       investor_countries: ["CR"],
       accepts_us_investors: false,
       uses_mass_marketing: false,

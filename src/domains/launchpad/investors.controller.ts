@@ -43,6 +43,17 @@ export class InvestorsController {
     );
   }
 
+  @Post(":wallet/onchain")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Register a whitelisted wallet on-chain (identity, KYC/AML claims). Idempotent.",
+  })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  registerOnchain(@Param("wallet") wallet: string): Promise<InvestorView> {
+    return this.investors.registerOnchain(wallet);
+  }
+
   @Get(":wallet")
   @ApiOperation({ summary: "Neko Pro whitelist status for a wallet." })
   @Throttle({ default: { limit: 60, ttl: 60_000 } })

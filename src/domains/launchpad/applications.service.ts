@@ -31,6 +31,9 @@ import {
   type WalletRow,
 } from "./launchpad.types";
 
+/** Every application view carries its on-chain deployment, if launched. */
+const WITH_DEPLOYMENT = "*, launchpad_deployments(*)";
+
 const REVIEWABLE: ReadonlySet<ApplicationStatus> = new Set([
   "submitted",
   "in_review",
@@ -80,6 +83,8 @@ export class ApplicationsService {
       });
     }
 
+    assertRaiseTerms(dto);
+
     const { data, error } = await this.supabase.client
       .from("launchpad_applications")
       .insert({
@@ -93,6 +98,7 @@ export class ApplicationsService {
         target_amount: dto.target_amount,
         currency: dto.currency,
         min_ticket: dto.min_ticket,
+        min_target: dto.min_target,
         expected_yield_pct: dto.expected_yield_pct ?? null,
         term_months: dto.term_months ?? null,
         max_investors: dto.max_investors ?? null,
@@ -104,7 +110,7 @@ export class ApplicationsService {
         documents: dto.documents,
         ai_summary: null,
       })
-      .select("*")
+      .select(WITH_DEPLOYMENT)
       .single();
     if (error || !data) throw this.dbError("application_insert", error);
     const view = toApplicationView(data as ApplicationRow);
@@ -164,7 +170,7 @@ export class ApplicationsService {
     const account = await this.accounts.getByAccessToken(accessToken);
     const { data, error } = await this.supabase.client
       .from("launchpad_applications")
-      .select("*")
+      .select(WITH_DEPLOYMENT)
       .eq("account_id", account.account.id)
       .order("created_at", { ascending: false });
     if (error) throw this.dbError("application_list_mine", error);
@@ -174,7 +180,7 @@ export class ApplicationsService {
   async adminList(status?: ApplicationStatus): Promise<ApplicationView[]> {
     let query = this.supabase.client
       .from("launchpad_applications")
-      .select("*")
+      .select(WITH_DEPLOYMENT)
       .order("created_at", { ascending: false })
       .limit(200);
     if (status) query = query.eq("status", status);
@@ -187,7 +193,7 @@ export class ApplicationsService {
   async adminGet(id: string): Promise<AdminApplicationView> {
     const { data, error } = await this.supabase.client
       .from("launchpad_applications")
-      .select("*")
+      .select(WITH_DEPLOYMENT)
       .eq("id", id)
       .maybeSingle();
     if (error) throw this.dbError("application_admin_get", error);
@@ -273,7 +279,7 @@ export class ApplicationsService {
   ): Promise<AdminApplicationView> {
     const { data: existing, error: lookupErr } = await this.supabase.client
       .from("launchpad_applications")
-      .select("*")
+      .select(WITH_DEPLOYMENT)
       .eq("id", id)
       .maybeSingle();
     if (lookupErr) throw this.dbError("application_decide_lookup", lookupErr);
@@ -309,7 +315,7 @@ export class ApplicationsService {
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", id)
-      .select("*")
+      .select(WITH_DEPLOYMENT)
       .single();
     if (updateErr || !updated)
       throw this.dbError("application_decide_update", updateErr);
@@ -359,5 +365,25 @@ export class ApplicationsService {
   private dbError(op: string, error: unknown) {
     this.logger.error({ event: "launchpad_application_db_error", op, error });
     return new InternalServerErrorException({ code: ErrorCode.DB_ERROR });
+  }
+}
+
+/** Cross-field rules class-validator can't express on single properties. */
+function assertRaiseTerms(dto: CreateApplicationDto): void {
+  const fail = (message: string) => {
+    throw new BadRequestException({ message });
+  };
+  if (dto.min_target < dto.min_ticket || dto.min_target > dto.target_amount) {
+    fail("min_target must be at least min_ticket and at most target_amount");
+  }
+  const total = dto.milestones.reduce((sum, m) => sum + m.amount_pct, 0);
+  if (Math.abs(total - 100) > 0.01) {
+    fail("milestones amount_pct must add up to 100");
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const dues = dto.milestones.map((m) => m.due.slice(0, 10));
+  if (dues[0] <= today) fail("the first milestone must be due after today");
+  if (dues.some((d, i) => i > 0 && d <= dues[i - 1])) {
+    fail("milestone dates must be in ascending order");
   }
 }
