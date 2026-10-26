@@ -9,6 +9,7 @@ import { fundWithFriendbot } from "@shared/stellar/friendbot";
 import { AccountsService } from "./accounts.service";
 import { ApplicationsService } from "./applications.service";
 import { InvestorsService } from "./investors.service";
+import type { ProIdentityService } from "./pro-identity.service";
 import type { AssistantService } from "./assistant/assistant.service";
 import type { OnchainIdentityService } from "./chain/onchain-identity.service";
 import type { CreateApplicationDto } from "./dto/create-application.dto";
@@ -160,10 +161,14 @@ function setup(env: Record<string, string> = BASE_ENV) {
   const onchainIdentity = {
     register: jest.fn().mockResolvedValue("CIDENTITY"),
   } as unknown as jest.Mocked<OnchainIdentityService>;
+  const identities = {
+    ensureRegistered: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<ProIdentityService>;
   const investors = new InvestorsService(
     db.service,
     verifications,
-    onchainIdentity
+    onchainIdentity,
+    identities
   );
   return {
     db,
@@ -175,6 +180,7 @@ function setup(env: Record<string, string> = BASE_ENV) {
     assistant,
     investors,
     onchainIdentity,
+    identities,
   };
 }
 
@@ -308,6 +314,33 @@ describe("InvestorsService", () => {
     expect(view.verification.claimed).toBe(true);
     expect(db.tables.launchpad_investors).toHaveLength(1);
     await expect(investors.get(WALLET_A)).resolves.toEqual(view);
+  });
+
+  it("registers a skipped (mock) verification's wallet on-chain", async () => {
+    const { verifications, investors, identities } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await investors.create(
+      started.verification.id,
+      started.claim_token,
+      WALLET_A
+    );
+    expect(identities.ensureRegistered).toHaveBeenCalledWith(WALLET_A);
+  });
+
+  it("does not whitelist when the on-chain registration fails", async () => {
+    const { verifications, investors, identities, db } = setup();
+    identities.ensureRegistered.mockRejectedValueOnce(new Error("rpc down"));
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await expect(
+      investors.create(started.verification.id, started.claim_token, WALLET_A)
+    ).rejects.toMatchObject({
+      response: { code: "ONCHAIN_IDENTITY_FAILED" },
+    });
+    expect(db.tables.launchpad_investors ?? []).toHaveLength(0);
+
+    await expect(
+      investors.create(started.verification.id, started.claim_token, WALLET_A)
+    ).resolves.toMatchObject({ wallet_address: WALLET_A });
   });
 
   it("is idempotent for the same verification and wallet", async () => {

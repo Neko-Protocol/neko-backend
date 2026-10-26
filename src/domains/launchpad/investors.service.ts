@@ -21,6 +21,7 @@ import {
   type WalletRow,
 } from "./launchpad.types";
 import { OnchainIdentityService } from "./chain/onchain-identity.service";
+import { ProIdentityService } from "./pro-identity.service";
 import { VerificationsService } from "./verifications.service";
 
 const TABLE = "launchpad_investors";
@@ -39,7 +40,8 @@ export class InvestorsService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly verifications: VerificationsService,
-    private readonly onchainIdentity: OnchainIdentityService
+    private readonly onchainIdentity: OnchainIdentityService,
+    private readonly identities: ProIdentityService
   ) {}
 
   async create(
@@ -66,6 +68,7 @@ export class InvestorsService {
           code: LaunchpadErrorCode.VERIFICATION_ALREADY_CLAIMED,
         });
       }
+      await this.registerProIdentity(wallet);
       return toInvestorView(bound, verification);
     }
     if (verification.claimed_at) {
@@ -79,6 +82,9 @@ export class InvestorsService {
         code: LaunchpadErrorCode.WALLET_ALREADY_VERIFIED,
       });
     }
+
+    // Before the row, so a failure leaves the wallet free to retry.
+    await this.registerProIdentity(wallet);
 
     const { data, error } = await this.supabase.client
       .from(TABLE)
@@ -163,7 +169,31 @@ export class InvestorsService {
       investor.verification_id
     );
     if (!verification) throw this.dbError("verification_lookup", null);
+    // Investors whitelisted before on-chain registration existed catch up here.
+    this.identities.ensureRegistered(investor.wallet_address).catch((error) =>
+      this.logger.error({
+        event: "pro_identity_backfill_failed",
+        wallet: investor.wallet_address,
+        error: String(error),
+      })
+    );
     return toInvestorView(investor, verification);
+  }
+
+  /** Neko Pro vault tokens only reach wallets in the Neko Pro identity registry. */
+  private async registerProIdentity(wallet: string): Promise<void> {
+    try {
+      await this.identities.ensureRegistered(wallet);
+    } catch (error) {
+      this.logger.error({
+        event: "pro_identity_register_failed",
+        wallet,
+        error: String(error),
+      });
+      throw new BadGatewayException({
+        code: LaunchpadErrorCode.ONCHAIN_IDENTITY_FAILED,
+      });
+    }
   }
 
   /**
