@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   Injectable,
@@ -16,6 +17,7 @@ import {
   type InvestorRow,
   type InvestorView,
 } from "./launchpad.types";
+import { ProIdentityService } from "./pro-identity.service";
 import { VerificationsService } from "./verifications.service";
 
 const TABLE = "launchpad_investors";
@@ -31,7 +33,8 @@ export class InvestorsService {
 
   constructor(
     private readonly supabase: SupabaseService,
-    private readonly verifications: VerificationsService
+    private readonly verifications: VerificationsService,
+    private readonly identities: ProIdentityService
   ) {}
 
   async create(
@@ -72,6 +75,9 @@ export class InvestorsService {
       });
     }
 
+    // Before the row, so a failure leaves the wallet free to retry.
+    await this.registerOnChain(wallet);
+
     const { data, error } = await this.supabase.client
       .from(TABLE)
       .insert({
@@ -102,6 +108,22 @@ export class InvestorsService {
     );
     if (!verification) throw this.dbError("verification_lookup", null);
     return toInvestorView(investor, verification);
+  }
+
+  /** The vault tokens only reach wallets in the on-chain identity registry. */
+  private async registerOnChain(wallet: string): Promise<void> {
+    try {
+      await this.identities.ensureRegistered(wallet);
+    } catch (error) {
+      this.logger.error({
+        event: "pro_identity_register_failed",
+        wallet,
+        error: String(error),
+      });
+      throw new BadGatewayException({
+        code: LaunchpadErrorCode.ONCHAIN_IDENTITY_FAILED,
+      });
+    }
   }
 
   private assertWallet(address: string): string {

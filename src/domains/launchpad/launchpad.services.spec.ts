@@ -8,6 +8,7 @@ import { fundWithFriendbot } from "@shared/stellar/friendbot";
 import { AccountsService } from "./accounts.service";
 import { ApplicationsService } from "./applications.service";
 import { InvestorsService } from "./investors.service";
+import type { ProIdentityService } from "./pro-identity.service";
 import type { AssistantService } from "./assistant/assistant.service";
 import type { CreateApplicationDto } from "./dto/create-application.dto";
 import {
@@ -155,7 +156,10 @@ function setup(env: Record<string, string> = BASE_ENV) {
       .mockResolvedValue("Private raise for a coffee harvest."),
   } as unknown as jest.Mocked<AssistantService>;
   const applications = new ApplicationsService(db.service, accounts, assistant);
-  const investors = new InvestorsService(db.service, verifications);
+  const identities = {
+    ensureRegistered: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<ProIdentityService>;
+  const investors = new InvestorsService(db.service, verifications, identities);
   return {
     db,
     didit,
@@ -165,6 +169,7 @@ function setup(env: Record<string, string> = BASE_ENV) {
     applications,
     assistant,
     investors,
+    identities,
   };
 }
 
