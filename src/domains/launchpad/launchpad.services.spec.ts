@@ -302,6 +302,17 @@ describe("InvestorsService", () => {
     await expect(investors.get(WALLET_A)).resolves.toEqual(view);
   });
 
+  it("registers a skipped (mock) verification's wallet on-chain", async () => {
+    const { verifications, investors, identities } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await investors.create(
+      started.verification.id,
+      started.claim_token,
+      WALLET_A
+    );
+    expect(identities.ensureRegistered).toHaveBeenCalledWith(WALLET_A);
+  });
+
   it("is idempotent for the same verification and wallet", async () => {
     const { verifications, investors, db } = setup();
     const started = await verifications.startMock("kyc", "Demo Judge");
