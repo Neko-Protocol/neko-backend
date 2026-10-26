@@ -22,7 +22,7 @@ import { randomBytes } from "crypto";
  */
 const DEFAULTS = {
   rpcUrl: "https://soroban-testnet.stellar.org",
-  identityRegistry: "CDVJ7VI3QWP7CC7SLZ3BVXDOOSAZBNKQNFK7HU5CX2EZCOC2I34ELROV",
+  identityRegistry: "CASQETGMSXSJR6V5FAUITYU36HVNA7EI5O2H2ZEWDXEIMXVLV2LE5XFY",
   claimIssuer: "CBYUESUTVUB4NV7PV63DYZYVK2DUIWASUKK55RBG7BVQLOZ2YCEJ76T4",
   // rwa_identity_example.wasm, already installed on testnet.
   identityWasmHash:
