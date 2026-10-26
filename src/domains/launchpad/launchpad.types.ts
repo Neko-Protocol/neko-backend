@@ -26,6 +26,16 @@ export const LaunchpadErrorCode = {
   INVESTOR_NOT_FOUND: "INVESTOR_NOT_FOUND",
   WALLET_ALREADY_VERIFIED: "WALLET_ALREADY_VERIFIED",
   ONCHAIN_IDENTITY_FAILED: "ONCHAIN_IDENTITY_FAILED",
+  CHAIN_NOT_CONFIGURED: "CHAIN_NOT_CONFIGURED",
+  APPLICATION_NOT_APPROVED: "APPLICATION_NOT_APPROVED",
+  ISSUER_WALLET_MISSING: "ISSUER_WALLET_MISSING",
+  TRUSTLINE_MISSING: "TRUSTLINE_MISSING",
+  LAUNCH_IN_PROGRESS: "LAUNCH_IN_PROGRESS",
+  DEPLOYMENT_NOT_LIVE: "DEPLOYMENT_NOT_LIVE",
+  CHAIN_CALL_FAILED: "CHAIN_CALL_FAILED",
+  FAUCET_RATE_LIMITED: "FAUCET_RATE_LIMITED",
+  FAUCET_UNAVAILABLE: "FAUCET_UNAVAILABLE",
+  OPPORTUNITY_NOT_FOUND: "OPPORTUNITY_NOT_FOUND",
 } as const;
 
 export type ApplicationStatus =
@@ -44,7 +54,67 @@ export type OfferingType = "private" | "public";
 export interface ApplicationMilestone {
   title: string;
   amount_pct: number;
+  /** YYYY-MM-DD; missing only on applications sent before it was required. */
   due?: string;
+}
+
+export type DeploymentStatus = "launching" | "live" | "failed";
+
+/** The launch steps, in the order they run. */
+export const LAUNCH_STEPS = [
+  "create_vault",
+  "wire_vault",
+  "accept_admin",
+  "bind_compliance",
+  "bind_registry",
+  "register_milestones",
+] as const;
+export type LaunchStep = (typeof LAUNCH_STEPS)[number];
+
+export interface DeploymentRow {
+  id: string;
+  application_id: string;
+  vault_id: string;
+  token_symbol: string;
+  funding_deadline: string;
+  token: string | null;
+  compliance: string | null;
+  vault: string | null;
+  status: DeploymentStatus;
+  /** Tx hash per step that ran; `"skipped"` when there was nothing to do. */
+  steps: Partial<Record<LaunchStep, string>>;
+  error: { step: LaunchStep; message: string } | null;
+  launched_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeploymentView {
+  vault_id: string;
+  token_symbol: string;
+  funding_deadline: string;
+  token: string | null;
+  compliance: string | null;
+  vault: string | null;
+  status: DeploymentStatus;
+  steps: Partial<Record<LaunchStep, string>>;
+  error: { step: LaunchStep; message: string } | null;
+  launched_at: string | null;
+}
+
+export function toDeploymentView(row: DeploymentRow): DeploymentView {
+  return {
+    vault_id: row.vault_id,
+    token_symbol: row.token_symbol,
+    funding_deadline: row.funding_deadline,
+    token: row.token,
+    compliance: row.compliance,
+    vault: row.vault,
+    status: row.status,
+    steps: row.steps ?? {},
+    error: row.error,
+    launched_at: row.launched_at,
+  };
 }
 
 export interface ApplicationDocument {
@@ -64,6 +134,7 @@ export interface ApplicationRow {
   target_amount: number | string;
   currency: string;
   min_ticket: number | string;
+  min_target: number | string | null;
   expected_yield_pct: number | string | null;
   term_months: number | null;
   max_investors: number | null;
@@ -79,6 +150,8 @@ export interface ApplicationRow {
   reviewed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Embedded by `select("*, launchpad_deployments(*)")`; object or array by PostgREST version. */
+  launchpad_deployments?: DeploymentRow | DeploymentRow[] | null;
 }
 
 export interface ApplicationView {
@@ -93,6 +166,7 @@ export interface ApplicationView {
   target_amount: number;
   currency: string;
   min_ticket: number;
+  min_target: number | null;
   expected_yield_pct: number | null;
   term_months: number | null;
   max_investors: number | null;
@@ -108,6 +182,7 @@ export interface ApplicationView {
   reviewed_at: string | null;
   created_at: string;
   updated_at: string;
+  deployment: DeploymentView | null;
 }
 
 export interface AdminApplicationView extends ApplicationView {
@@ -193,6 +268,10 @@ export interface InvestorRow {
   wallet_address: string;
   verification_id: string;
   network: string;
+  /** The investor's identity contract, owned by the platform manager. */
+  identity_contract: string | null;
+  /** When the wallet was registered in the shared identity registry. */
+  onchain_registered_at: string | null;
   created_at: string;
 }
 
@@ -234,6 +313,9 @@ export interface InvestorView {
   network: string;
   /** True while the bound verification is approved; gates Neko Pro. */
   whitelisted: boolean;
+  /** Registered on-chain with KYC/AML claims, so it can hold vault tokens. */
+  onchain: boolean;
+  identity_contract: string | null;
   verification: VerificationView;
   created_at: string;
 }
@@ -246,6 +328,8 @@ export function toInvestorView(
     wallet_address: row.wallet_address,
     network: row.network,
     whitelisted: verification.status === "approved",
+    onchain: Boolean(row.onchain_registered_at),
+    identity_contract: row.identity_contract ?? null,
     verification: toVerificationView(verification),
     created_at: row.created_at,
   };
@@ -288,6 +372,7 @@ export function toApplicationView(row: ApplicationRow): ApplicationView {
     target_amount: toNumber(row.target_amount),
     currency: row.currency,
     min_ticket: toNumber(row.min_ticket),
+    min_target: toNullableNumber(row.min_target),
     expected_yield_pct: toNullableNumber(row.expected_yield_pct),
     term_months: row.term_months == null ? null : Number(row.term_months),
     max_investors: row.max_investors == null ? null : Number(row.max_investors),
@@ -303,5 +388,12 @@ export function toApplicationView(row: ApplicationRow): ApplicationView {
     reviewed_at: row.reviewed_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    deployment: embeddedDeployment(row),
   };
+}
+
+function embeddedDeployment(row: ApplicationRow): DeploymentView | null {
+  const embedded = row.launchpad_deployments;
+  const deployment = Array.isArray(embedded) ? embedded[0] : embedded;
+  return deployment ? toDeploymentView(deployment) : null;
 }
