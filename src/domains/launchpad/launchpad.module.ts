@@ -11,6 +11,8 @@ import { AssistantController } from "./assistant/assistant.controller";
 import { AssistantService } from "./assistant/assistant.service";
 import { RagClient } from "./assistant/rag.client";
 import { DiditWebhookController } from "./didit-webhook.controller";
+import { InvestorsController } from "./investors.controller";
+import { InvestorsService } from "./investors.service";
 import { LaunchpadController } from "./launchpad.controller";
 import { VerificationsService } from "./verifications.service";
 
@@ -22,10 +24,12 @@ import { VerificationsService } from "./verifications.service";
     ApplicationsController,
     AdminApplicationsController,
     AssistantController,
+    InvestorsController,
   ],
   providers: [
     VerificationsService,
     AccountsService,
+    InvestorsService,
     ApplicationsService,
     AssistantService,
     AssistantStorageService,

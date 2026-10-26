@@ -58,6 +58,12 @@ export class AccountsService {
       }
       return this.view(existing.account, verification, existing.wallet);
     }
+    if (verification.claimed_at) {
+      // Claimed by a Neko Pro investor wallet instead of an account.
+      throw new ConflictException({
+        code: LaunchpadErrorCode.VERIFICATION_ALREADY_CLAIMED,
+      });
+    }
 
     const { data: emailTaken, error: emailErr } = await this.supabase.client
       .from("launchpad_accounts")

@@ -1,11 +1,13 @@
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "crypto";
+import { StrKey } from "@stellar/stellar-sdk";
 import type { SupabaseService } from "@core/supabase/supabase.service";
 import type { DiditService } from "@core/didit/didit.service";
 import type { PrivyService } from "@core/privy/privy.service";
 import { fundWithFriendbot } from "@shared/stellar/friendbot";
 import { AccountsService } from "./accounts.service";
 import { ApplicationsService } from "./applications.service";
+import { InvestorsService } from "./investors.service";
 import type { AssistantService } from "./assistant/assistant.service";
 import type { CreateApplicationDto } from "./dto/create-application.dto";
 import {
@@ -153,7 +155,17 @@ function setup(env: Record<string, string> = BASE_ENV) {
       .mockResolvedValue("Private raise for a coffee harvest."),
   } as unknown as jest.Mocked<AssistantService>;
   const applications = new ApplicationsService(db.service, accounts, assistant);
-  return { db, didit, privy, verifications, accounts, applications, assistant };
+  const investors = new InvestorsService(db.service, verifications);
+  return {
+    db,
+    didit,
+    privy,
+    verifications,
+    accounts,
+    applications,
+    assistant,
+    investors,
+  };
 }
 
 const SAMPLE_APPLICATION: CreateApplicationDto = {
@@ -242,6 +254,149 @@ describe("VerificationsService", () => {
       full_name: null,
     });
     expect(didit.createSession).not.toHaveBeenCalled();
+  });
+});
+
+const WALLET_A = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 1));
+const WALLET_B = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 2));
+
+describe("VerificationsService callback", () => {
+  it("returns Neko Pro sessions to PRO_APP_URL", async () => {
+    const { verifications, didit } = setup({
+      ...BASE_ENV,
+      PRO_APP_URL: "http://localhost:3001/",
+    });
+    await verifications.start("kyc", "pro");
+    expect(didit.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callback: "http://localhost:3001/didit-callback",
+      })
+    );
+  });
+});
+
+describe("InvestorsService", () => {
+  it("whitelists the wallet and claims the verification", async () => {
+    const { verifications, investors, db } = setup();
+    const started = await verifications.startMock("kyb", "Neko Coffee");
+
+    const view = await investors.create(
+      started.verification.id,
+      started.claim_token,
+      ` ${WALLET_A} `
+    );
+
+    expect(view).toMatchObject({
+      wallet_address: WALLET_A,
+      network: "testnet",
+      whitelisted: true,
+      verification: { kind: "kyb", business_name: "Neko Coffee" },
+    });
+    expect(view.verification.claimed).toBe(true);
+    expect(db.tables.launchpad_investors).toHaveLength(1);
+    await expect(investors.get(WALLET_A)).resolves.toEqual(view);
+  });
+
+  it("is idempotent for the same verification and wallet", async () => {
+    const { verifications, investors, db } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    const first = await investors.create(
+      started.verification.id,
+      started.claim_token,
+      WALLET_A
+    );
+    const second = await investors.create(
+      started.verification.id,
+      started.claim_token,
+      WALLET_A
+    );
+    expect(second).toEqual(first);
+    expect(db.tables.launchpad_investors).toHaveLength(1);
+  });
+
+  it("refuses a verification bound to another wallet", async () => {
+    const { verifications, investors } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await investors.create(
+      started.verification.id,
+      started.claim_token,
+      WALLET_A
+    );
+    await expect(
+      investors.create(started.verification.id, started.claim_token, WALLET_B)
+    ).rejects.toMatchObject({
+      response: { code: "VERIFICATION_ALREADY_CLAIMED" },
+    });
+  });
+
+  it("refuses a wallet that is already whitelisted", async () => {
+    const { verifications, investors } = setup();
+    const a = await verifications.startMock("kyc", "A");
+    const b = await verifications.startMock("kyc", "B");
+    await investors.create(a.verification.id, a.claim_token, WALLET_A);
+    await expect(
+      investors.create(b.verification.id, b.claim_token, WALLET_A)
+    ).rejects.toMatchObject({
+      response: { code: "WALLET_ALREADY_VERIFIED" },
+    });
+  });
+
+  it("refuses a verification that is not approved", async () => {
+    const { verifications, investors, didit } = setup();
+    didit.getDecision.mockResolvedValue({
+      session_id: "sess-1",
+      status: "In Review",
+    });
+    const started = await verifications.start("kyc", "pro");
+    await expect(
+      investors.create(started.verification.id, started.claim_token, WALLET_A)
+    ).rejects.toMatchObject({
+      response: { code: "VERIFICATION_NOT_APPROVED" },
+    });
+  });
+
+  it("refuses a verification already claimed by a Launchpad account", async () => {
+    const { verifications, accounts, investors } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await accounts.create(
+      started.verification.id,
+      started.claim_token,
+      "ana@x.com"
+    );
+    await expect(
+      investors.create(started.verification.id, started.claim_token, WALLET_A)
+    ).rejects.toMatchObject({
+      response: { code: "VERIFICATION_ALREADY_CLAIMED" },
+    });
+  });
+
+  it("does not let a Launchpad account reuse an investor's verification", async () => {
+    const { verifications, accounts, investors } = setup();
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await investors.create(
+      started.verification.id,
+      started.claim_token,
+      WALLET_A
+    );
+    await expect(
+      accounts.create(started.verification.id, started.claim_token, "a@x.com")
+    ).rejects.toMatchObject({
+      response: { code: "VERIFICATION_ALREADY_CLAIMED" },
+    });
+  });
+
+  it("answers INVESTOR_NOT_FOUND for a wallet that never verified", async () => {
+    const { investors } = setup();
+    await expect(investors.get(WALLET_B)).rejects.toMatchObject({
+      response: { code: "INVESTOR_NOT_FOUND" },
+    });
+  });
+
+  it("rejects a malformed wallet", async () => {
+    const { investors } = setup();
+    await expect(investors.get("GNOPE")).rejects.toMatchObject({
+      response: { code: "INVALID_WALLET" },
+    });
   });
 });
 

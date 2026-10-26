@@ -7,6 +7,8 @@ export const CLAIM_TOKEN_HEADER = "x-claim-token";
 
 export type VerificationKind = "kyc" | "kyb";
 export type VerificationProvider = "didit" | "mock";
+/** Which frontend started the verification; picks Didit's callback origin. */
+export type VerificationApp = "launchpad" | "pro";
 
 export const LaunchpadErrorCode = {
   VERIFICATION_NOT_FOUND: "VERIFICATION_NOT_FOUND",
@@ -21,6 +23,8 @@ export const LaunchpadErrorCode = {
   APPLICATION_NOT_FOUND: "APPLICATION_NOT_FOUND",
   APPLICATION_NOT_REVIEWABLE: "APPLICATION_NOT_REVIEWABLE",
   ISSUER_NOT_VERIFIED: "ISSUER_NOT_VERIFIED",
+  INVESTOR_NOT_FOUND: "INVESTOR_NOT_FOUND",
+  WALLET_ALREADY_VERIFIED: "WALLET_ALREADY_VERIFIED",
 } as const;
 
 export type ApplicationStatus =
@@ -160,6 +164,14 @@ export interface WalletRow {
   created_at: string;
 }
 
+export interface InvestorRow {
+  id: string;
+  wallet_address: string;
+  verification_id: string;
+  network: string;
+  created_at: string;
+}
+
 export interface VerificationView {
   id: string;
   kind: VerificationKind;
@@ -190,6 +202,28 @@ export interface LaunchpadAccountView {
     network: string;
     funded: boolean;
     funding_tx_hash: string | null;
+  };
+}
+
+export interface InvestorView {
+  wallet_address: string;
+  network: string;
+  /** True while the bound verification is approved; gates Neko Pro. */
+  whitelisted: boolean;
+  verification: VerificationView;
+  created_at: string;
+}
+
+export function toInvestorView(
+  row: InvestorRow,
+  verification: VerificationRow
+): InvestorView {
+  return {
+    wallet_address: row.wallet_address,
+    network: row.network,
+    whitelisted: verification.status === "approved",
+    verification: toVerificationView(verification),
+    created_at: row.created_at,
   };
 }
 

@@ -45,7 +45,7 @@ export class LaunchpadController {
   @ApiOperation({ summary: "Start a Didit KYC/KYB session." })
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   start(@Body() dto: CreateVerificationDto): Promise<StartedVerification> {
-    return this.verifications.start(dto.kind);
+    return this.verifications.start(dto.kind, dto.app);
   }
 
   @Post("verifications/mock")

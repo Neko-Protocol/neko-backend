@@ -22,6 +22,7 @@ import {
   LaunchpadErrorCode,
   toVerificationView,
   type StartedVerification,
+  type VerificationApp,
   type VerificationKind,
   type VerificationRow,
   type VerificationView,
@@ -48,7 +49,10 @@ export class VerificationsService {
     return this.config.get<string>("KYC_MOCK_ENABLED")?.trim() === "true";
   }
 
-  async start(kind: VerificationKind): Promise<StartedVerification> {
+  async start(
+    kind: VerificationKind,
+    app: VerificationApp = "launchpad"
+  ): Promise<StartedVerification> {
     const workflowId = this.workflowId(kind);
     if (!this.didit.isConfigured() || !workflowId) {
       throw new ServiceUnavailableException({
@@ -70,7 +74,7 @@ export class VerificationsService {
       session = await this.didit.createSession({
         workflowId,
         vendorData: row.id,
-        callback: this.callbackUrl(),
+        callback: this.callbackUrl(app),
         metadata: { verification_id: row.id, kind },
       });
     } catch (err) {
@@ -196,12 +200,13 @@ export class VerificationsService {
     return this.config.get<string>(key)?.trim() || undefined;
   }
 
-  private callbackUrl(): string | undefined {
-    const base = this.config.get<string>("LAUNCHPAD_APP_URL")?.trim();
+  private callbackUrl(app: VerificationApp): string | undefined {
+    const key = app === "pro" ? "PRO_APP_URL" : "LAUNCHPAD_APP_URL";
+    const base = this.config.get<string>(key)?.trim();
     return base ? `${base.replace(/\/+$/, "")}/didit-callback` : undefined;
   }
 
-  private async find(id: string): Promise<VerificationRow | null> {
+  async find(id: string): Promise<VerificationRow | null> {
     const { data, error } = await this.supabase.client
       .from(TABLE)
       .select("*")
