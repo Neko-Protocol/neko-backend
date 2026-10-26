@@ -108,6 +108,14 @@ export class InvestorsService {
       investor.verification_id
     );
     if (!verification) throw this.dbError("verification_lookup", null);
+    // Investors whitelisted before on-chain registration existed catch up here.
+    this.identities.ensureRegistered(investor.wallet_address).catch((error) =>
+      this.logger.error({
+        event: "pro_identity_backfill_failed",
+        wallet: investor.wallet_address,
+        error: String(error),
+      })
+    );
     return toInvestorView(investor, verification);
   }
 
