@@ -313,6 +313,22 @@ describe("InvestorsService", () => {
     expect(identities.ensureRegistered).toHaveBeenCalledWith(WALLET_A);
   });
 
+  it("does not whitelist when the on-chain registration fails", async () => {
+    const { verifications, investors, identities, db } = setup();
+    identities.ensureRegistered.mockRejectedValueOnce(new Error("rpc down"));
+    const started = await verifications.startMock("kyc", "Demo Judge");
+    await expect(
+      investors.create(started.verification.id, started.claim_token, WALLET_A)
+    ).rejects.toMatchObject({
+      response: { code: "ONCHAIN_IDENTITY_FAILED" },
+    });
+    expect(db.tables.launchpad_investors ?? []).toHaveLength(0);
+
+    await expect(
+      investors.create(started.verification.id, started.claim_token, WALLET_A)
+    ).resolves.toMatchObject({ wallet_address: WALLET_A });
+  });
+
   it("is idempotent for the same verification and wallet", async () => {
     const { verifications, investors, db } = setup();
     const started = await verifications.startMock("kyc", "Demo Judge");
