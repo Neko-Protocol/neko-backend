@@ -24,6 +24,7 @@ import { DiditWebhookController } from "./didit-webhook.controller";
 import { InvestorsController } from "./investors.controller";
 import { InvestorsService } from "./investors.service";
 import { LaunchpadController } from "./launchpad.controller";
+import { ProIdentityService } from "./pro-identity.service";
 import { VerificationsService } from "./verifications.service";
 
 @Module({
@@ -42,6 +43,7 @@ import { VerificationsService } from "./verifications.service";
     VerificationsService,
     AccountsService,
     InvestorsService,
+    ProIdentityService,
     ApplicationsService,
     AssistantService,
     AssistantStorageService,
