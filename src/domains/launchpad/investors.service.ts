@@ -61,6 +61,7 @@ export class InvestorsService {
           code: LaunchpadErrorCode.VERIFICATION_ALREADY_CLAIMED,
         });
       }
+      await this.registerOnChain(wallet);
       return toInvestorView(bound, verification);
     }
     if (verification.claimed_at) {
