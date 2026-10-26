@@ -9,6 +9,10 @@ import {
 import { ErrorCode } from "@neko-protocol/api-contracts";
 import { SupabaseService } from "@core/supabase/supabase.service";
 import { AccountsService } from "./accounts.service";
+import {
+  scoreApplicationSimilarity,
+  type ApplicationSimilarityFields,
+} from "./application-similarity";
 import { AssistantService } from "./assistant/assistant.service";
 import type { CreateApplicationDto } from "./dto/create-application.dto";
 import type { DecideApplicationDto } from "./dto/decide-application.dto";
@@ -21,6 +25,8 @@ import {
   type ApplicationRow,
   type ApplicationStatus,
   type ApplicationView,
+  type SimilarApplicationCase,
+  type SimilarApplicationsResponse,
   type VerificationRow,
   type WalletRow,
 } from "./launchpad.types";
@@ -33,6 +39,28 @@ const REVIEWABLE: ReadonlySet<ApplicationStatus> = new Set([
   "in_review",
   "changes_requested",
 ]);
+
+const SIMILAR_CASE_COLUMNS = [
+  "id",
+  "asset_name",
+  "asset_type",
+  "issuer_country",
+  "offering_type",
+  "target_amount",
+  "currency",
+  "status",
+  "review_note",
+  "reviewed_at",
+  "investor_countries",
+  "accepts_us_investors",
+  "uses_mass_marketing",
+].join(",");
+
+type SimilarCaseRow = Omit<
+  SimilarApplicationCase,
+  "target_amount" | "score" | "matched"
+> &
+  ApplicationSimilarityFields;
 
 @Injectable()
 export class ApplicationsService {
@@ -177,6 +205,73 @@ export class ApplicationsService {
     return this.toAdminView(data as ApplicationRow);
   }
 
+  async adminSimilar(
+    id: string,
+    limit = 5
+  ): Promise<SimilarApplicationsResponse> {
+    const { data: target, error: targetError } = await this.supabase.client
+      .from("launchpad_applications")
+      .select(SIMILAR_CASE_COLUMNS)
+      .eq("id", id)
+      .maybeSingle();
+    if (targetError)
+      throw this.dbError("application_similar_target", targetError);
+    if (!target) {
+      throw new NotFoundException({
+        code: LaunchpadErrorCode.APPLICATION_NOT_FOUND,
+      });
+    }
+
+    let cases: SimilarApplicationCase[] = [];
+    // Page through all decisions so Supabase's row cap cannot hide better matches.
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await this.supabase.client
+        .from("launchpad_applications")
+        .select(SIMILAR_CASE_COLUMNS)
+        .in("status", ["approved", "rejected", "changes_requested"])
+        .neq("id", id)
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw this.dbError("application_similar_cases", error);
+
+      const rows = (data ?? []) as unknown as SimilarCaseRow[];
+      for (const row of rows) {
+        const similarity = scoreApplicationSimilarity(
+          target as unknown as ApplicationSimilarityFields,
+          row
+        );
+        if (similarity.score === 0) continue;
+        cases.push({
+          id: row.id,
+          asset_name: row.asset_name,
+          asset_type: row.asset_type,
+          issuer_country: row.issuer_country,
+          offering_type: row.offering_type,
+          target_amount: Number(row.target_amount),
+          currency: row.currency,
+          status: row.status,
+          review_note: row.review_note,
+          reviewed_at: row.reviewed_at,
+          ...similarity,
+        });
+      }
+      cases = cases
+        .sort(
+          (a, b) =>
+            b.score - a.score ||
+            (b.reviewed_at ?? "").localeCompare(a.reviewed_at ?? "") ||
+            a.id.localeCompare(b.id)
+        )
+        .slice(0, limit);
+      if (rows.length < pageSize) break;
+    }
+
+    const summary = { approved: 0, rejected: 0, changes_requested: 0 };
+    for (const item of cases) summary[item.status] += 1;
+    return { summary, cases };
+  }
+
   async adminDecide(
     id: string,
     dto: DecideApplicationDto,
@@ -227,7 +322,9 @@ export class ApplicationsService {
     return this.toAdminView(updated as ApplicationRow);
   }
 
-  private async toAdminView(row: ApplicationRow): Promise<AdminApplicationView> {
+  private async toAdminView(
+    row: ApplicationRow
+  ): Promise<AdminApplicationView> {
     const { data: account, error: accountErr } = await this.supabase.client
       .from("launchpad_accounts")
       .select("*")
