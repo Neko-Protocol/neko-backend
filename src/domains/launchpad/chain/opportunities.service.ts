@@ -31,6 +31,7 @@ export interface OpportunityView {
   token_symbol: string;
   vault: string;
   token: string;
+  compliance: string | null;
   vault_id: string;
   funding_deadline: string;
   milestones: ApplicationMilestone[];
@@ -108,6 +109,7 @@ function toOpportunity(row: ApplicationRow): OpportunityView | null {
     token_symbol: d.token_symbol,
     vault: d.vault,
     token: d.token,
+    compliance: d.compliance,
     vault_id: d.vault_id,
     funding_deadline: d.funding_deadline,
     milestones: view.milestones,
