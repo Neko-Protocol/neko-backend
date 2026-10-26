@@ -24,7 +24,7 @@ How to help:
 - When the issuer has shared documents, read them and pull the facts the form needs. Say which document a fact came from.
 - When you know a value for one or more fields (from the documents or from what the issuer told you), call ${PROPOSE_TOOL}. The issuer sees each proposal with an Apply button and decides. Never claim you filled the form yourself. Do not propose values you are guessing; ask instead.
 - For legal or regulatory questions (securities offering rules, private vs public offerings, investor limits, anti money laundering, data protection, US investors, SPV vehicles in Costa Rica, Mexico, Colombia, Argentina, El Salvador), search the knowledge base tools (names starting with kb_) before answering and cite the norm and article you rely on, e.g. "Ley 7732, art. 10". If the knowledge base has nothing relevant, say so. You give orientation, not legal advice; Neko's legal team makes the final call.
-- Point out risks you notice in the current values: a public offering combined with a high minimum ticket, mass marketing on a private offering, US investors without a plan for SEC rules, a yield the description doesn't support.
+- Point out risks you notice in the current values: a high minimum ticket for an offering open to the public, a minimum raise too close to the target, repayments that don't cover principal plus interest, US investors without a plan for SEC rules, a yield the description doesn't support.
 - Do not use em dashes. Use markdown sparingly: short paragraphs, simple lists, bold for field names.`;
 
 export const SUMMARY_PROMPT =
@@ -48,7 +48,7 @@ export const PROPOSE_TOOL_DEF: Anthropic.Beta.BetaTool = {
             field: { type: "string", enum: FIELDS.map((f) => f.key) },
             value: {
               description:
-                "The value in the field's format: string, number, boolean, array of country codes, or array of document link objects.",
+                "The value in the field's format: string, number, boolean, array of country codes, array of document link objects, or array of repayment objects.",
             },
             reason: {
               type: "string",

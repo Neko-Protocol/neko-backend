@@ -1,8 +1,7 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty } from "@nestjs/swagger";
 import {
   IsDateString,
   IsNumber,
-  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -23,8 +22,7 @@ export class ApplicationMilestoneDto {
   @Max(100)
   amount_pct!: number;
 
-  @ApiPropertyOptional({ description: "ISO date when the milestone is due." })
-  @IsOptional()
+  @ApiProperty({ description: "ISO date when the milestone is due." })
   @IsDateString()
-  due?: string;
+  due!: string;
 }
