@@ -7,6 +7,12 @@ import {
 import { ErrorCode } from "@neko-protocol/api-contracts";
 import { AdminAuthService } from "./admin-auth.service";
 
+export interface AdminRequest {
+  headers: Record<string, string | string[] | undefined>;
+  /** Set by AdminAuthGuard once the token checks out. */
+  adminEmail?: string;
+}
+
 /**
  * Protects admin-only routes: requires a Supabase access token (from the
  * admin-auth OTP sign-in flow) belonging to an active row in admin_emails.
@@ -18,9 +24,7 @@ export class AdminAuthGuard implements CanActivate {
   constructor(private readonly adminAuth: AdminAuthService) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const req = ctx.switchToHttp().getRequest<{
-      headers: Record<string, string | string[] | undefined>;
-    }>();
+    const req = ctx.switchToHttp().getRequest<AdminRequest>();
 
     const raw = req.headers["authorization"];
     const header = Array.isArray(raw) ? raw[0] : raw;
@@ -28,9 +32,11 @@ export class AdminAuthGuard implements CanActivate {
       ? header.slice("Bearer ".length).trim()
       : undefined;
 
-    if (!token || !(await this.adminAuth.verifyAdminToken(token))) {
+    const email = token ? await this.adminAuth.verifyAdminToken(token) : null;
+    if (!email) {
       throw new UnauthorizedException({ code: ErrorCode.UNAUTHORIZED });
     }
+    req.adminEmail = email;
     return true;
   }
 }

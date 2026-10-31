@@ -78,4 +78,92 @@ export const envValidationSchema = Joi.object({
   ADMIN_WALLET_ADDRESS: Joi.string().optional().allow(""),
   RESEND_API_KEY: Joi.string().optional().allow(""),
   RESEND_FROM_EMAIL: Joi.string().default("noreply@nekoprotocol.xyz"),
+
+  PRIVY_APP_ID: Joi.string().optional().allow(""),
+  PRIVY_APP_SECRET: Joi.string().optional().allow(""),
+  PRIVY_VERIFICATION_KEY: Joi.string().optional().allow(""),
+
+  DIDIT_API_KEY: Joi.string().optional().allow(""),
+  DIDIT_WEBHOOK_SECRET: Joi.string().optional().allow(""),
+  DIDIT_KYC_WORKFLOW_ID: Joi.string().uuid().optional().allow(""),
+  DIDIT_KYB_WORKFLOW_ID: Joi.string().uuid().optional().allow(""),
+  DIDIT_BASE_URL: Joi.string()
+    .uri({ scheme: ["https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_APP_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  PRO_APP_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_FRIENDBOT_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  KYC_MOCK_ENABLED: Joi.string().valid("true", "false", "").optional(),
+  REVIEW_SKIP_ENABLED: Joi.string().valid("true", "false", "").optional(),
+
+  ANTHROPIC_API_KEY: Joi.string().optional().allow(""),
+  ANTHROPIC_MODEL: Joi.string().optional().allow(""),
+  LAUNCHPAD_RAG_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  // Launchpad contracts on testnet. Only keys and roots: every other address
+  // is read off the ledger at startup. Kept apart from the mainnet STELLAR_*.
+  LAUNCHPAD_RPC_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_HORIZON_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  LAUNCHPAD_NETWORK_PASSPHRASE: Joi.string().optional().allow(""),
+  LAUNCHPAD_PUBLIC_API_URL: Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .optional()
+    .allow(""),
+  NEKO_MANAGER_SECRET: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_ADMIN_SECRET: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_USDC_ISSUER_SECRET: Joi.string()
+    .pattern(/^S[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_CLAIM_SIGNING_KEY: Joi.string()
+    .pattern(/^[0-9a-fA-F]{64}$/)
+    .optional()
+    .allow(""),
+  NEKO_USDC_ASSET: Joi.string()
+    .pattern(/^[A-Za-z0-9]{1,12}:G[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_FACTORY_ID: Joi.string()
+    .pattern(/^C[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_MILESTONE_TRACKER_ID: Joi.string()
+    .pattern(/^C[A-Z2-7]{55}$/)
+    .optional()
+    .allow(""),
+  NEKO_IDENTITY_WASM_HASH: Joi.string()
+    .pattern(/^[0-9a-fA-F]{64}$/)
+    .optional()
+    .allow(""),
+  NEKO_EXIT_FEE_BPS: Joi.number().integer().min(0).max(10_000).optional(),
+  NEKO_MAX_EXIT_FEE_BPS: Joi.number().integer().min(0).max(10_000).optional(),
+
+  LAUNCHPAD_ASSISTANT_BUCKET: Joi.string().default("launchpad-assistant-docs"),
+  LAUNCHPAD_APPLICATION_BUCKET: Joi.string().default(
+    "launchpad-application-docs"
+  ),
 });
